@@ -45,3 +45,7 @@ Nakamura Y, Reva M, DiGregorio DA (2018) Variations in Ca2+ Influx Can Alte
 TA Nielsen, DA DiGregorio, RA Silver (2004) Modulation of glutamate mobility reveals the mechanism underlying slow-rising AMPAR EPSCs and the diffusion coefficient in the synaptic cleft. Neuron 42:757–771. https://doi.org/10.1016/j.neuron.2004.04.003
 
 JS Rothman, L Kocsis, E Herzog, Z Nusser, RA Silver (2016) Physical determinants of vesicle mobility and supply at a central synapse. Elife. 2016 Aug 19;5. pii: e15133. https://doi.org/10.7554/eLife.15133
+# D3D GUI
+![alt tag](http://ucl.ac.uk/silverlab/images/D3D_MonteCarlo_FRAP.png)
+
+Screnshot of a D3D Monte Carlo FRAP simulation showing mitochondria (dark grey), synaptic vesicles (green and light gray) and the illumination point-spread function (blue). See Rothman et al., 2016.
