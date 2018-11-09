@@ -1,5 +1,0 @@
-ucl.silver.d3d.gui.PanelParams_buttonNew_mouseAdapter
-ucl.silver.d3d.gui.PanelParams_buttonKill_mouseAdapter
-ucl.silver.d3d.gui.PanelParams
-ucl.silver.d3d.gui.PanelParams_ParamSelect_itemAdapter
-ucl.silver.d3d.gui.PanelParams_objectArrayNum_changeAdapter
