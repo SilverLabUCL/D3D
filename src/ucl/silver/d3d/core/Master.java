@@ -49,6 +49,34 @@ public final class Master {
     public static MainFrame mainframe = null;
 
     private static Project[] projects = null;
+
+    public static String[] initProjectList = {"InitProject", "InitFD_Demo", "InitMC_Demo"};
+    public static String[] diffusantList = {"Diffusant", "DiffusantCalretinin", "DiffusantCalretininCa", "DiffusantParvalbuminCa", "DiffusantPhoto", "DiffusantReactant", "DiffusantVesicles", "DiffusantVesiclesAZ"};
+    public static String[] detectorList = {"Detector", "DetectorAvg", "DetectorDye", "DetectorPSF", "DetectorSnapshot"};
+    public static String[] sourceList = {"Source", "SourceGauss", "SourceGamma", "SourceUptake"};
+    
+    public static String[] psfList = {"PSF", "PSFgauss", "PSFtorok", "PSFwilson"};
+
+    public static String[] colorScaleList = {"BTC", "BTY", "Gray", "LinGray", "Heat", "Optimal", "LinOptimal", "Magenta", "Rainbow"};
+
+    public static ColorScaleBTC colorScaleBTC = null;
+    public static ColorScaleBTY colorScaleBTY = null;
+    public static ColorScaleGray colorScaleGray = null;
+    public static ColorScaleLinGray colorScaleLinGray = null;
+    public static ColorScaleHeat colorScaleHeat = null;
+    public static ColorScaleOptimal colorScaleOptimal = null;
+    public static ColorScaleLinOptimal colorScaleLinOptimal = null;
+    public static ColorScaleMagenta colorScaleMagenta = null;
+    public static ColorScaleRainbow colorScaleRainbow = null;
+
+    public static BufferedWriter bw1 = null;
+    private static BufferedWriter bw2 = null;
+
+    private static String[] logList = null;
+
+    public static boolean writeToFiles = false; // allows writing to external file
+
+    public static boolean foundMainStartUpArguments = false;
     
     //private static String initClassAndFunction = "InitProject.initCube";
     
@@ -85,36 +113,25 @@ public final class Master {
     //private static String initClassAndFunction = "InitFD_GlutamateUncaging.initLargeSpot";
     //private static String initClassAndFunction = "InitFD_GlutamateUncaging.initGlomerulus";
 
-    public static String[] initProjectList = {"InitProject", "InitFD_Demo", "InitMC_Demo"};
-    public static String[] diffusantList = {"Diffusant", "DiffusantCalretinin", "DiffusantCalretininCa", "DiffusantParvalbuminCa", "DiffusantPhoto", "DiffusantReactant", "DiffusantVesicles", "DiffusantVesiclesAZ"};
-    public static String[] detectorList = {"Detector", "DetectorAvg", "DetectorDye", "DetectorPSF", "DetectorSnapshot"};
-    public static String[] sourceList = {"Source", "SourceGauss", "SourceGamma", "SourceUptake"};
-    
-    public static String[] psfList = {"PSF", "PSFgauss", "PSFtorok", "PSFwilson"};
-
-    public static String[] colorScaleList = {"BTC", "BTY", "Gray", "LinGray", "Heat", "Optimal", "LinOptimal", "Magenta", "Rainbow"};
-
-    public static ColorScaleBTC colorScaleBTC = null;
-    public static ColorScaleBTY colorScaleBTY = null;
-    public static ColorScaleGray colorScaleGray = null;
-    public static ColorScaleLinGray colorScaleLinGray = null;
-    public static ColorScaleHeat colorScaleHeat = null;
-    public static ColorScaleOptimal colorScaleOptimal = null;
-    public static ColorScaleLinOptimal colorScaleLinOptimal = null;
-    public static ColorScaleMagenta colorScaleMagenta = null;
-    public static ColorScaleRainbow colorScaleRainbow = null;
-
-    public static BufferedWriter bw1 = null;
-    private static BufferedWriter bw2 = null;
-
-    private static String[] logList = null;
-
-    public static boolean writeToFiles = false; // allows writing to external file
-
-    public static boolean foundMainStartUpArguments = false;
-
     private Master(){
         // cannot be instantiated
+    }
+    
+    private static boolean initProjectClass(String initClass) {
+
+        if (initClass.equalsIgnoreCase("InitProject")) {
+            project.initProject = new InitProject(project);
+        } else if (initClass.equalsIgnoreCase("InitFD_Demo")) {
+            project.initProject = new InitFD_Demo(project);
+        } else if (initClass.equalsIgnoreCase("InitMC_Demo")) {
+            project.initProject = new InitMC_Demo(project);
+        } else {
+            log("Master.initProject error: failed to find init Class " + initClass);
+            return true; // error
+        }
+
+        return false;
+
     }
 
     public static boolean initStartupArgs(String[][] startupArgs, boolean onlyProject, boolean onlyInitProject) {
@@ -719,23 +736,6 @@ public final class Master {
         }
 
         return error;
-
-    }
-
-    private static boolean initProjectClass(String initClass) {
-
-        if (initClass.equalsIgnoreCase("InitProject")) {
-            project.initProject = new InitProject(project);
-        } else if (initClass.equalsIgnoreCase("InitFD_Demo")) {
-            project.initProject = new InitFD_Demo(project);
-        } else if (initClass.equalsIgnoreCase("InitMC_Demo")) {
-            project.initProject = new InitMC_Demo(project);
-        } else {
-            log("Master.initProject error: failed to find init Class " + initClass);
-            return true; // error
-        }
-
-        return false;
 
     }
 
