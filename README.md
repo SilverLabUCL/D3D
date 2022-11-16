@@ -1,5 +1,5 @@
 # D3D
-D3D is a Java-based 3D reaction-diffusion simulator created by The Silver Lab at University College London (http://silverlab.org/).
+D3D is a 3D reaction-diffusion simulator created by The Silver Lab at University College London (http://silverlab.org/) written in Java.
 
 To simulate diffusion, D3D uses either an explicit finite-difference method similar to that described by Crank (1975) or a Monte Carlo algorithm for non-overlapping hard spheres that explicitly accounts for excluded volume effects (Cichocki and Hinsen, 1990).
 
