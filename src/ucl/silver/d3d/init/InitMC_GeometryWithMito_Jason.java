@@ -9,38 +9,38 @@ import java.util.Random;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public final class InitMC_GeometryWithMito_Jason extends ParamVector {
     
-    public double xdim = 8;
-    public double ydim = 8;
-    public double zdim = 10;
+    public double xdim = 0;
+    public double ydim = 0;
+    public double zdim = 0;
     public boolean ellipsoid = false;
     public boolean eighth_geometry = false;
     public boolean nob = false;
     
+    //public int extraVoxelsXYZ = 0; // allows placement of mito beyond geometry limits
+    
     public double xvcenter, yvcenter, zvcenter;
     
     public boolean mitoNonSpaceVoxels = false;
-    public double mitoRadius = (0.25 / 0.89) / 2.0; // um Palay
-    public double mitoAxialRatio = 2.0 / 0.25; // Palay
-    public double mitoVolumeFraction = 0.28; // Zoltan average
-    public double mitoVolumeFractionTolerance = 0.02;
+    public double mitoBoundaryCube = 0; // boundary limits if > 0
+    public double mitoRadius = (0.25 / 0.89) * 0.5; // um Palay
+    public double mitoAxialRatio = 8; // Palay
+    public double mitoVolumeFraction = 0; // Zoltan average
+    public double mitoVolumeFractionTolerance = 0.01;
     public double mitoVolumeFractionActual = 0;
     public boolean mitoVolumeFractionExact = false;
     public boolean mitoPreset = false;
     public boolean mitoCylinder = true;
     public int mito_ijkselect = -1;
-    
-    public long seed = 8682522807148012L + System.nanoTime();
-    
-    Random ran = new Random(seed);
+    public int mito_linked = 0;
 
     public InitMC_GeometryWithMito_Jason(Project p) {
         super(p);
@@ -108,7 +108,7 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
     }
 
-    public void initGeometryMC2() {
+    private void initGeometryMC2() {
 
         Geometry geometry = project.geometry;
 
@@ -141,7 +141,7 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
     }
 
-    public boolean initGeometryMitochondriaPreset() {
+    private boolean initGeometryMitochondriaPreset() {
 
         double x0, y0, z0;
 
@@ -206,7 +206,7 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
     }
 
-    public Coordinates[] getMitochondriaPreset0() {
+    private Coordinates[] getMitochondriaPreset0() {
 
         double x0, y0, z0;
 
@@ -243,7 +243,7 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
     }
 
-    public Coordinates[] getMitochondriaPreset1() {
+    private Coordinates[] getMitochondriaPreset1() {
 
         double xo, yo;
 
@@ -274,7 +274,7 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
     }
 
-    public Coordinates[] getMitochondriaPreset2() {
+    private Coordinates[] getMitochondriaPreset2() {
 
         double xo, zo;
 
@@ -325,7 +325,7 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
     }
 
-    public boolean initGeometryMitochondria() {
+    private boolean initGeometryMitochondria() {
 
         int maxMitoTrials = 500, trialCount = 0;
 
@@ -372,28 +372,27 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
     }
 
-    public boolean initGeometryMitochondria2() {
+    private boolean initGeometryMitochondria2() {
 
         double dran, volumeFraction;
-
+        int extraVoxelsXYZ = 0;
         int znob = 2;
-
-        int linkNum = 3;
-        int extraVoxelsXYZ = 25;
 
         RunMonteCarloAZ mc;
 
         Geometry geometry = project.geometry;
-
+        
         CoordinatesVoxels c = new CoordinatesVoxels(project, geometry);
 
         if (nob) {
-            c.setVoxels(geometry.xVoxel1, geometry.yVoxel1, geometry.zVoxel1, geometry.xVoxel2, geometry.yVoxel2, geometry.zVoxel2-znob);
-        } else {
-            c.setVoxels(geometry.xVoxel1, geometry.yVoxel1, geometry.zVoxel1, geometry.xVoxel2, geometry.yVoxel2, geometry.zVoxel2);
+            c.set("zVoxel2", (c.zVoxel2-znob));
         }
 
         initGeometryMC2();
+        
+        long seed = 8682522807148012L + System.nanoTime();
+    
+        Random ran = new Random(seed);
 
         if (mito_ijkselect == -2) {
 
@@ -408,15 +407,19 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
             }
 
         }
-
+        
+        if (geometry.simpleCuboid && (mitoBoundaryCube > geometry.xWidth)) {
+            extraVoxelsXYZ = (int) (0.5 * (mitoBoundaryCube - geometry.xWidth) / project.dx);
+        }  
+        
         if (mitoVolumeFractionExact) {
-            volumeFraction = GeometryTools.addEllipsoids(geometry, c, mitoRadius, mitoAxialRatio, mitoVolumeFraction, -1, mitoVolumeFractionExact, mito_ijkselect, mitoCylinder, linkNum, extraVoxelsXYZ);
+            volumeFraction = GeometryTools.addEllipsoids(geometry, c, mitoRadius, mitoAxialRatio, mitoVolumeFraction, mitoVolumeFractionExact, mito_ijkselect, mitoCylinder, mito_linked, extraVoxelsXYZ);
         } else {
-            volumeFraction = GeometryTools.addEllipsoids(geometry, c, mitoRadius, mitoAxialRatio, mitoVolumeFraction - mitoVolumeFractionTolerance, -1, mitoVolumeFractionExact, mito_ijkselect, mitoCylinder, linkNum, extraVoxelsXYZ);
+            volumeFraction = GeometryTools.addEllipsoids(geometry, c, mitoRadius, mitoAxialRatio, mitoVolumeFraction - mitoVolumeFractionTolerance, mitoVolumeFractionExact, mito_ijkselect, mitoCylinder, mito_linked, extraVoxelsXYZ);
         }
 
         if ((volumeFraction < mitoVolumeFraction - mitoVolumeFractionTolerance) || (volumeFraction > mitoVolumeFraction + mitoVolumeFractionTolerance)) {
-            return true; // error
+            return true; // not within tolerance
         }
 
         if (project.monteCarlo instanceof RunMonteCarloAZ) {
@@ -425,7 +428,7 @@ public final class InitMC_GeometryWithMito_Jason extends ParamVector {
 
             double azWidthVoxels = mc.azWidth / project.dx;
             double azHeightVoxels = mc.azHeight / project.dx;
-            int extra = 0;//1;
+            int extra = 1;
 
             int i1 = (int) Math.round(geometry.xVoxelCenter - (azWidthVoxels/2) - extra);
             int i2 = (int) Math.round(geometry.xVoxelCenter + (azWidthVoxels/2) + extra);

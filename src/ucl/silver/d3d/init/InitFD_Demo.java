@@ -9,23 +9,23 @@ import ucl.silver.d3d.utils.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class InitFD_Demo extends InitProject {
     
     //private final String directory = "/Jason/D3D/Simulations/";
-    private final String directory = "/Users/jason/Documents/D3D/Simulations/";
+    //private final String directory = "/Users/jason/Documents/D3D/Simulations/";
     
     private final String folder = "Testing";
     
     public InitFD_Demo(Project p) {
         super(p);
-        String[] flist = {"initCalciumChannel", "initGlutamateSource", "initGlutamateSourceCleft", "initCrankCylinder", "initCrankCylinderMovie", "initCrankPlane", "initGlomerulus", "initFrapAxelrod", "init_MFT_Scott_Rusakov"};
+        String[] flist = {"initCalciumChannel", "initGlutamateSource", "initGlutamateSourceCleft", "initCrankCylinder", "initCrankCylinderMovie", "initCrankPlane", "initGlomerulus_Nielsen2004", "initFrapAxelrod", "init_MFT_Scott_Rusakov"};
         initFuncList = flist;
         project.newFiniteDifference(); // turn on FD
         createVector(true);
@@ -50,7 +50,7 @@ public class InitFD_Demo extends InitProject {
             case 5:
                 return initCrankPlane();
             case 6:
-                return initGlomerulus();
+                return initGlomerulus_Nielsen2004();
             case 7:
                 return initFrapAxelrod();
             case 8:
@@ -93,7 +93,7 @@ public class InitFD_Demo extends InitProject {
 
         double glut_C0 = 0;
 
-        int idiff = Master.addDiffusant("glutamate", glut_C0, Utility.D_GLUTAMATE); // add glutamate particle
+        int idiff = Master.addDiffusant("glutamate", glut_C0, Utility.D_GLUTAMATE_37C); // add glutamate particle
         
         coordinates.setVoxelPoint(geometry.xVoxel1, geometry.yVoxelCenter, geometry.zVoxel1);
         coordinates.yVoxel2++;
@@ -104,12 +104,12 @@ public class InitFD_Demo extends InitProject {
         double ctotal = Utility.N2C(molecules, project.dx, coordinates.voxels);
         double ctotal_final = Utility.N2C(molecules, project.dx, geometry.spaceVoxels); // end of simulation
         
-        PulseTimer timer = new PulseTimer(project, tonset, 0, ctotal);
+        PulseTimer timer = new PulseTimer(project, tonset, 0, ctotal, "mM");
         
         timer.add(tonset + 1, 0, ctotal); // second pulse
         ctotal_final *= 2; // second pulse
         
-        Source source = Master.addSource(idiff, coordinates, timer);
+        Source source = Master.addSource(idiff, coordinates, timer, "C");
 
         xv1 = geometry.xVoxel2;
         yv1 = geometry.yVoxel1;
@@ -130,13 +130,13 @@ public class InitFD_Demo extends InitProject {
         return false;
 
     }
-
+    
     private boolean initGlutamateSourceCleft() {
 
         double xv1, yv1, zv1, xv2, yv2, zv2;
 
         int molecules = 4000; // # glutamate
-        double release_onset = 0.1; // ms
+        double release_onset = 0.5; // ms
         double release_duration = 0; // ms // impulse
         //double release_duration = 0.25; // ms
         
@@ -147,9 +147,9 @@ public class InitFD_Demo extends InitProject {
         project.directory = directory;
         project.folder = folder;
 
-        project.simTime = 2;
+        project.simTime = 50;
         project.dx = 0.01;
-        project.set("printDT", 0.2);
+        project.set("printDT", 5);
         project.set("saveDT", 0.01);
         
         double xwidth = 0.05;
@@ -160,7 +160,7 @@ public class InitFD_Demo extends InitProject {
 
         double glut_C0 = 0;
 
-        int idiff = Master.addDiffusant("glutamate", glut_C0, Utility.D_GLUTAMATE);
+        int idiff = Master.addDiffusant("glutamate", glut_C0, Utility.D_GLUTAMATE_37C);
 
         xv1 = geometry.xVoxel1;
         yv1 = (int) geometry.yVoxelCenter;
@@ -174,15 +174,23 @@ public class InitFD_Demo extends InitProject {
         double ctotal = Utility.N2C(molecules, project.dx, coordinates.spaceVoxels);
         double ctotal_final = Utility.N2C(molecules, project.dx, geometry.spaceVoxels); // end of simulation
         
-        timer = new PulseTimer(project, release_onset, release_duration, ctotal);
-        timer.add(release_onset + 1, release_duration, ctotal); // second pulse
-        source = Master.addSource(idiff, coordinates, timer);
+        timer = new PulseTimer(project, release_onset, release_duration, ctotal, "mM");
+        timer.add(release_onset + 10, release_duration, ctotal); // second pulse
+        source = Master.addSource(idiff, coordinates, timer, "C");
         //source.save.save2TextFile = true;
         
         ctotal_final *= 2; // second pulse
         
         Master.log("start Ctotal=" + ctotal);
         Master.log("end Ctotal=" + ctotal_final);
+        
+        double uptake_krate = 1; // 1/ms
+        
+        if (uptake_krate > 0) {
+            source = Master.addSourceUptake(idiff, geometry, uptake_krate);
+            //source.save.save2BinaryFile = true;
+            //source.saveSelect = "pA";
+        }
 
         xv1 = geometry.xVoxel2;
         yv1 = geometry.yVoxelCenter - 4;
@@ -195,14 +203,18 @@ public class InitFD_Demo extends InitProject {
 
         Master.addDetectorAvg(idiff, coordinates);
         
-        yv1 -= 40;
-        yv2 -= 40;
+        if (false) {
+
+            yv1 -= 40;
+            yv2 -= 40;
+
+            coordinates.setVoxels(xv1, yv1, zv1, xv2, yv2, zv2);
+
+            Master.addDetectorAvg(idiff, coordinates); // spillover
+
+        }
         
-        coordinates.setVoxels(xv1, yv1, zv1, xv2, yv2, zv2);
-
-        Master.addDetectorAvg(idiff, coordinates);
-
-        DetectorSnapshot snap = Master.addDetectorSnapshot(idiff, "xy", 0, release_onset + 0.2);
+        //DetectorSnapshot snap = Master.addDetectorSnapshot(idiff, "xy", 0, release_onset + 0.2);
         
         project.diffusants[idiff].displayMaxC = ctotal_final * 100;
 
@@ -230,7 +242,7 @@ public class InitFD_Demo extends InitProject {
 
         double Ca_C0 = 0; // mM // initial calcium concentration
 
-        int dnum = Master.addDiffusant("Ca", Ca_C0, Utility.D_CALCIUM);
+        int dnum = Master.addDiffusant("Ca", Ca_C0, Utility.D_CALCIUM_20C);
 
         x0 = geometry.xVoxelCenter;
         y0 = geometry.yVoxelCenter;
@@ -241,7 +253,7 @@ public class InitFD_Demo extends InitProject {
         coordinates.xyVoxelSquare(x0, y0, z0, source_width);
         //coordinates.setVoxelPoint(x0, y0, z0);
 
-        double tpeak = 1.0; // ms
+        double tpeak = 1; // ms
         double gaussSTDV = 0.2; // ms
         double gammaTau = 0.2; // ms
         double caCurrent = 2; // pA, peak
@@ -252,10 +264,10 @@ public class InitFD_Demo extends InitProject {
         Source s = null;
         
         if (sourceType.equalsIgnoreCase("gauss")) {
-            cTotal = SourceGauss.Ipeak2Ctotal(caCurrent, gaussSTDV, caCurrent, coordinates.volume);
+            cTotal = Utility.gaussIpeak2Ctotal(caCurrent, gaussSTDV, caCurrent, coordinates.volume);
             s = Master.addSourceGauss(dnum, coordinates, tpeak, gaussSTDV, cTotal);
         } else if (sourceType.equalsIgnoreCase("gamma")) {
-            cTotal = SourceGamma.Ipeak2Ctotal(caCurrent, gammaTau, caCurrent, coordinates.volume, 2);
+            cTotal = Utility.gammaIpeak2Ctotal(caCurrent, 2, 1.0 / gammaTau, caCurrent, coordinates.volume);
             s = Master.addSourceGamma(dnum, coordinates, tpeak, gaussSTDV, cTotal);
         }
         
@@ -371,7 +383,7 @@ public class InitFD_Demo extends InitProject {
         
         double releaseTime = 0.01;
         
-        Master.addSourceImpulse(dnum, coordinates, releaseTime, source_cTotal);
+        Master.addSourceImpulse(dnum, coordinates, releaseTime, source_cTotal, "mM");
 
         dk = (int) (distance_between_detectors / dx);
 
@@ -410,8 +422,6 @@ public class InitFD_Demo extends InitProject {
         int yVoxels = 30;
         int zVoxels = 1;
 
-        Diffusant d;
-
         project.name = "Crank Long Cylinder";
         project.directory = directory;
         project.folder = folder;
@@ -425,7 +435,7 @@ public class InitFD_Demo extends InitProject {
 
         int dnum = Master.addDiffusant("p", C0, D0);
         
-        d = project.diffusants[dnum];
+        Diffusant d = project.diffusants[dnum];
         d.displayMinC = 0;
         d.displayMaxC = 0.1;
         
@@ -435,11 +445,11 @@ public class InitFD_Demo extends InitProject {
 
         coordinates.setVoxels(x0, y1, 0, x0, y2, 0);
         
-        PulseTimer pt = new PulseTimer(project, 0.2, 0, source_ctotal);
+        PulseTimer pt = new PulseTimer(project, 0.2, 0, source_ctotal, "mM");
         pt.add(0.7, 0, source_ctotal);
         pt.add(1.2, 0, source_ctotal);
         
-        Master.addSource(dnum, coordinates, pt);
+        Master.addSource(dnum, coordinates, pt, "C");
         Master.addDetectorAvg(dnum, coordinates);
 
         return false;
@@ -493,7 +503,7 @@ public class InitFD_Demo extends InitProject {
         
         double releaseTime = 0.01;
         
-        Master.addSourceImpulse(dnum, coordinates, releaseTime, source_cTotal);
+        Master.addSourceImpulse(dnum, coordinates, releaseTime, source_cTotal, "C");
 
         int di = (int) (distance_between_detectors / project.dx);
 
@@ -519,7 +529,7 @@ public class InitFD_Demo extends InitProject {
 
     }
     
-    private boolean initGlomerulus() {
+    private boolean initGlomerulus_Nielsen2004() {
         // Thomas A. Nielsen, David A. DiGregorio, and R. Angus Silver
         // Modulation of Glutamate Mobility Reveals the Mechanism Underlying Slow-Rising AMPAR EPSCs
         // Neuron, Vol. 42, 757–771, June 10, 2004
@@ -531,7 +541,7 @@ public class InitFD_Demo extends InitProject {
 
         project.simTime = 8;
         project.dx = 0.02;
-        project.stability = 0.4;
+        project.finiteDifference.stability = 0.4;
         project.set("printDT", 1);
         project.set("saveDT", 0.01);
         //project.set("saveDT", 0.001);
@@ -554,7 +564,7 @@ public class InitFD_Demo extends InitProject {
         
         double C0 = 0; // mM
         
-        int dnum = Master.addDiffusant("glutamate", C0, Utility.D_GLUTAMATE);
+        int dnum = Master.addDiffusant("glutamate", C0, Utility.D_GLUTAMATE_37C);
 
         GeometryGlomerulus.create(geometry, nDenX, nDenY, iDenWidth, iDenHeight, iCleft, iCleft);
         
@@ -570,7 +580,7 @@ public class InitFD_Demo extends InitProject {
         
         double ctotal = Utility.N2C(molecules, project.dx, coordinates.spaceVoxels);
         
-        Master.addSourceImpulse(dnum, coordinates, trelease, ctotal);
+        Master.addSourceImpulse(dnum, coordinates, trelease, ctotal, "C");
         
         int i1 = i0 - idetectorWidthHalf;
         int j1 = i1;
@@ -643,7 +653,7 @@ public class InitFD_Demo extends InitProject {
 
         project.simTime = FRAP_onset + 10000;
         project.dx = 0.05;
-        project.stability = 0.0017;
+        project.finiteDifference.stability = 0.0017;
         project.set("printDT", 500); // ms
         project.set("saveDT", 0.1); // ms
         
@@ -676,14 +686,14 @@ public class InitFD_Demo extends InitProject {
         iPSF.set("zVoxelCenter", geometry.zVoxelCenter);
         iPSF.name = "Illumination PSF";
         
-        PulseTimer timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, 1.0);
+        PulseTimer timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, FRAP_kPhoto, "1/ms");
         // one bleaching pulse, no small probe pulses
         
         double C0 = 1.0; // initial fluorescence (which is concentration)
         double Dlong = 0.025e-3; // um^2/ms // effective diffusion constant of vesicles
         int dnum = -1; // not used
 
-        DiffusantPhoto vesicles = new DiffusantPhoto(project, "vesicles", C0, Dlong, null, dnum, timer, iPSF, FRAP_kPhoto);
+        DiffusantPhoto vesicles = new DiffusantPhoto(project, "vesicles", C0, Dlong, null, dnum, timer, iPSF);
         //vesicles.save.save2BinaryFile = true; // for saving timer/kPhoto
 
         int iVesicles = project.addDiffusant(vesicles);
@@ -747,7 +757,7 @@ public class InitFD_Demo extends InitProject {
             
         project.simTime = 1000;
         project.dx = dx;
-        project.stability = 0.0001;
+        project.finiteDifference.stability = 0.0001;
         project.set("printDT", 50); // ms
         project.set("saveDT", 0.01); // ms
         
@@ -821,7 +831,7 @@ public class InitFD_Demo extends InitProject {
         int source_numPulses = 5;
         double source_pulseInterval = 50; // ms // 20 Hz
         
-        PulseTimer pt = new PulseTimer(project, source_tpeak, source_tstdv, source_Ctotal, source_numPulses, source_pulseInterval);
+        PulseTimer pt = new PulseTimer(project, source_tpeak, source_tstdv, source_Ctotal, "mM", source_numPulses, source_pulseInterval);
 
         SourceGauss s = Master.addSourceGauss(iCa, geometry, pt);
         s.saveSelect = "pA";
