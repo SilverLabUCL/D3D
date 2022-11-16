@@ -20,7 +20,7 @@ For more information contact j.rothman@ucl.ac.uk
 
 7. Demo initialisation classes that include several simulation examples (D3D > Project > Init).
 
-8. Functions for creating 2D projections of spherical particles for Monte Carlo simulations. Demo functions for recreating the 2D projections used in the manuscript 'Validation of a stereological method for estimating particle size and density from 2D projections with high accuracy' (D3D > Project > Init > InitMC_Projection_Demo).
+8. Functions for creating 2D projections of spherical particles for Monte Carlo simulations, including demo functions for recreating the 2D projections used in the manuscript 'Validation of a stereological method for estimating particle size and density from 2D projections with high accuracy' https://doi.org/10.1101/2022.10.21.513285 (D3D > Project > Init > InitMC_Projection_Demo).
 
 # Published D3D Studies Include:
 1. Glutamate release in the synaptic cleft between cerebellar mossy fiber terminals (MFTs) and granule cell (GC) dendrites (Nielsen et al., 2004).
