@@ -6,29 +6,29 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class DiffusantPhoto extends Diffusant {
 
     // [a] ---> [b]
     //
     // this Diffusant represents [a]
-    // which is converted to [b] at rate kPhoto
+    // which is converted to [b] at rate Kphoto
     //
     public int aDiffusantNum; // this diffusant
     public String bDiffusantName = null; // diffusant name for [b]
     public int bDiffusantNum = -1; // diffusant number for [b], if -1 then [b] is not saved
     
-    public double kPhoto; // k of photolysis reaction (1/ms)
+    // Kphoto is PulseTimer amplitude
 
     @Override
     public String units(String name) {
-        if (name.equalsIgnoreCase("kPhoto")) {
+        if (name.equalsIgnoreCase("Kphoto")) {
             return "1/" + project.timeUnits;
         }
         return super.units(name);
@@ -43,7 +43,7 @@ public class DiffusantPhoto extends Diffusant {
     }
 
     public DiffusantPhoto(Project p, String NAME, double InitialConcentration, double diffusionConstant, CoordinatesVoxels c,
-            int DiffusantNumB, PulseTimer pt, PSF PSF, double Kphoto) {
+            int DiffusantNumB, PulseTimer pt, PSF PSF) {
 
         super(p, NAME, InitialConcentration, diffusionConstant, c);
 
@@ -51,7 +51,6 @@ public class DiffusantPhoto extends Diffusant {
         pulseTimer = pt;
         psf = PSF;
         reaction = true;
-        kPhoto = Kphoto;
 
         createVector(true);
 
@@ -84,19 +83,30 @@ public class DiffusantPhoto extends Diffusant {
                 error("init", "bDiffusantNum", "value conflicts with aDiffusantNum");
             }
         }
+        
+        if (pulseTimer == null) {
+            //error("init", "pulseTimer", "no pulse timer for photolysis reaction");
+            Master.log("warning: no pulseTimer for photolysis reaction: " + this);
+        }
+
+    }
+    
+    @Override
+    public void saveFileName(){
+
+        if (save != null) {
+            save.fileName(name, "Kphoto");
+        }
 
     }
     
     @Override
     public void saveDimensions() {
         
-        if (save == null) {
-            return;
+        if ((save != null) && save.autoDimensions) {
+            save.xdim = project.timeUnits;
+            save.ydim = "Kphoto (1/" + project.timeUnits + ")";
         }
-        
-        super.saveDimensions();
-
-        save.ydim = "kPhoto (1/ms)";
 
     }
 
@@ -104,22 +114,27 @@ public class DiffusantPhoto extends Diffusant {
     public void react(RunFiniteDifference fd, int aNum) {
         double photolysis;
         int ipnt = fd.thisPnt;
+        
+        saveValue = 0;
 
         if (aNum != aDiffusantNum) {
             return;
         }
-
-        if ((pulseTimer != null) && (pulseTimer.high(fd.it) == 0)) {
-            saveValue = 0;
+        
+        if (fd.it >= pulseTimer.timer.length) {
             return;
         }
 
-        saveValue = kPhoto;
+        saveValue = pulseTimer.high(fd.it); // Kphoto = PulseTimer amplitude
+        
+        if (saveValue == 0) {
+            return; // nothing to do
+        }
 
         if (fd.psf == null) {
-            photolysis = fd.diffnext[aNum][ipnt] * kPhoto * project.dt;
+            photolysis = fd.diffnext[aNum][ipnt] * saveValue * project.dt;
         } else {
-            photolysis = fd.diffnext[aNum][ipnt] * kPhoto * fd.psf[aNum][ipnt] * project.dt;
+            photolysis = fd.diffnext[aNum][ipnt] * saveValue * fd.psf[aNum][ipnt] * project.dt;
         }
 
         fd.diffnext[aNum][ipnt] -= photolysis;
@@ -191,13 +206,6 @@ public class DiffusantPhoto extends Diffusant {
 
         if (n.equalsIgnoreCase("bDiffusantNum")) {
             return SetDiffusantNumB((int) v);
-        }
-        if (n.equalsIgnoreCase("kPhoto")) {
-            if (v < 0) {
-                return false;
-            }
-            kPhoto = v;
-            return true;
         }
         return super.setMyParams(o, v);
     }

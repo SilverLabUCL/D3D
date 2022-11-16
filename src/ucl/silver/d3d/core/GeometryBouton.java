@@ -8,12 +8,12 @@ import ucl.silver.d3d.utils.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 final public class GeometryBouton {
 
@@ -166,9 +166,9 @@ final public class GeometryBouton {
 
     }
 
-    public static void addVesicles(Geometry geometry, int N, double vwidth, long seed) { // vesicles are cubes
+    public static void addVesicles(Geometry geometry, int N, double vwidth) { // vesicles are cubes
         if (bouton != null) {
-            GeometryTools.addCuboids(geometry, bouton, N, vwidth, vwidth, vwidth, seed); // add to bouton
+            GeometryTools.addCuboids(geometry, bouton, N, vwidth, vwidth, vwidth); // add to bouton
         }
     }
 

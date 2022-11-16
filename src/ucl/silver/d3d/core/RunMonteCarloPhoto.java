@@ -7,17 +7,21 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class RunMonteCarloPhoto extends RunMonteCarlo {
     
     public boolean frapOn = false;
     public boolean saveFluorescence = false;
+    
+    public CoordinatesVoxels initFluorescenceCoordinates = null;
+    public double initF_inside = 1;
+    public double initF_outside = 0;
     
     public transient PSF PSFi = null; // illumination PSF
     public transient PSF PSFd = null; // detection PSF
@@ -51,7 +55,9 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
             return true;
         }
         
-        countVesiclesWithinPSF();
+        initFluorescence();
+        
+        countParticlesWithinPSF();
 
         if (PSFi != null) {
             PSFi.sum(geometry);
@@ -240,6 +246,36 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
 
     }
     
+    public void initFluorescence() {
+
+        if ((!frapOn) || (diffusants == null)) {
+            return;
+        }
+
+        for (DiffusantParticles d : diffusants) {
+
+            if ((d == null) || (d.particles == null) || (geometry == null)) {
+                continue;
+            }
+
+            for (DiffusantParticle p : d.particles) {
+                if (initFluorescenceCoordinates != null) {
+                    if (p.isinside(initFluorescenceCoordinates)) {
+                        p.fluorescence = initF_inside;
+                    } else {
+                        p.fluorescence = initF_outside;
+                    }
+                } else if (p.isinside(geometry)) {
+                    p.fluorescence = initF_inside;
+                } else {
+                    p.fluorescence = initF_outside;
+                }
+            }
+
+        }
+
+    }
+    
     public double meanFluorescence(boolean printResults) {
 
         double w, avg = 0, count = 0;
@@ -248,25 +284,25 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
             return 0;
         }
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle p : d.particles) {
 
-                if (!v.insideGeometry) {
+                if (!p.insideGeometry) {
                     continue;
                 }
 
                 if (freeDiffusion || PBC) {
                     w = 1.0;
                 } else {
-                    w = v.voxel.PSFweight;
+                    w = p.voxel.PSFweight;
                 }
 
-                avg += v.fluorescence * v.voxel.PSFd * w;
+                avg += p.fluorescence * p.voxel.PSFd * w;
                 count++;
 
             }
@@ -309,23 +345,23 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
                 continue;
             }
 
-            if (diffusants[dnum].vesicles == null) {
+            if (diffusants[dnum].particles == null) {
                 continue;
             }
 
-            for (DiffusantVesicle v : diffusants[dnum].vesicles) {
+            for (DiffusantParticle p : diffusants[dnum].particles) {
 
-                if (!v.insideGeometry) {
+                if (!p.insideGeometry) {
                     continue;
                 }
 
                 //if (freeDiffusion || PBC) {
                 //w = 1.0;
                 //} else {
-                //w = diffusant[dnum].vesicle[j].voxel.PSFweight; // extra weighting due to non-space voxels
+                //w = diffusant[dnum].particle[j].voxel.PSFweight; // extra weighting due to non-space voxels
                 //}
-                //f = diffusants[dnum].vesicles[j].fluorescence * diffusants[dnum].vesicles[j].voxel.PSFd * w;
-                f = v.fluorescence;
+                //f = diffusants[dnum].particles[j].fluorescence * diffusants[dnum].particles[j].voxel.PSFd * w;
+                f = p.fluorescence;
 
                 if (f < 1.0 - e2) {
                     count++;
@@ -341,7 +377,7 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
 
     }
 
-    public int countVesiclesWithinPSF() {
+    public int countParticlesWithinPSF() {
 
         int dnum;
         int count = 0;
@@ -363,17 +399,17 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
                 continue;
             }
 
-            if (diffusants[dnum].vesicles == null) {
+            if (diffusants[dnum].particles == null) {
                 continue;
             }
 
-            for (DiffusantVesicle v : diffusants[dnum].vesicles) {
+            for (DiffusantParticle p : diffusants[dnum].particles) {
 
-                if (!v.insideGeometry) {
+                if (!p.insideGeometry) {
                     continue;
                 }
 
-                if (v.voxel.PSFd > e2) {
+                if (p.voxel.PSFd > e2) {
                     count++;
                 }
 
@@ -381,7 +417,7 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
 
         }
 
-        Master.log("vesicles within cPSF n = " + count);
+        Master.log("particles within cPSF n = " + count);
 
         return count;
 
@@ -390,15 +426,15 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
     @Override
     public void react() {
 
-        DiffusantVesiclesPhoto dp;
+        DiffusantParticlesPhoto dp;
 
         if (frapOn) {
 
             detectFluorescence();
 
-            for (DiffusantVesicles d : diffusants) {
-                if (d instanceof DiffusantVesiclesPhoto) {
-                    dp = (DiffusantVesiclesPhoto) d;
+            for (DiffusantParticles d : diffusants) {
+                if (d instanceof DiffusantParticlesPhoto) {
+                    dp = (DiffusantParticlesPhoto) d;
                     dp.react(itime);
                 }
             }
@@ -428,23 +464,23 @@ public class RunMonteCarloPhoto extends RunMonteCarlo {
                 continue;
             }
 
-            if (diffusants[dnum].vesicles == null) {
+            if (diffusants[dnum].particles == null) {
                 continue;
             }
 
-            for (DiffusantVesicle v : diffusants[dnum].vesicles) {
+            for (DiffusantParticle p : diffusants[dnum].particles) {
 
-                if (!v.insideGeometry) {
+                if (!p.insideGeometry) {
                     continue;
                 }
 
                 if (freeDiffusion || PBC) {
                     w = 1.0;
                 } else {
-                    w = v.voxel.PSFweight; // extra weighting due to non-space voxels
+                    w = p.voxel.PSFweight; // extra weighting due to non-space voxels
                 }
 
-                avg += v.fluorescence * v.voxel.PSFd * w;
+                avg += p.fluorescence * p.voxel.PSFd * w;
                 count++;
 
             }

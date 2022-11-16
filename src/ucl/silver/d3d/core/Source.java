@@ -9,33 +9,47 @@ import ucl.silver.d3d.utils.Utility;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class Source extends ParamVector {
+    
+    // simple step source
+    // on for all time, unless PulseTimer exists
+    
+    // Pulse time = onset (ms)
+    // Pulse duration (ms)
+    // Pulse amplitude = Q (mM/ms) or Ctotal (mM) or Ntotal (molecules) (see type)
 
     public String diffusantName = null;
     public int diffusantNum = -1; // diffusant array number in Project
+    
+    public String type = "Q";
+    // "Q"  (mM/ms)
+    // "C" for Ctotal (mM)
+    // "Cclamp" for clamping to Cvoxel (mM)
+    // "N" for Ntotal (molecules)
+    // "K" (1/ms) (e.g. uptake)
 
-    //public double Qmax = Double.NaN; // mM/ms
+    public double Q = Double.NaN; // mM/ms
     public double Ctotal = Double.NaN; // mM, M = moles/L
-    private double Cvoxel = Double.NaN; // mM, for source with no pulse timer
+    public double Cvoxel = Double.NaN; // mM // Ctotal / numVoxels
+    private double Cvoxel_dt = Double.NaN; // mM per dt, used in "release" if no PulseTimer
     public double Ntotal = Double.NaN; // molecules
     public double Nvoxel = Double.NaN; // molecules
-
-    //public String initSelect = "Ctotal";
-    public String saveSelect = "mM/ms"; // "mM/ms" or "mM" or "pA"
+    public boolean clamp = false; // source clamps voxels to Cvoxel
+    
     public int voxels, spaceVoxels;
     public boolean totalVoxelsForSpaceVoxelsOnly = true;
-
-    public boolean clamp = false; // source "clamps" voxels to Ctotal
     public boolean noOverlapCoordinates = false;
-
-    public double C2I_conversionFactor = Double.NaN;
+    private double liters = Double.NaN;
+    
+    public String saveSelect = "mM/ms"; // "mM/ms" or "mM" or "pA", output file units
+    private double C2I = Double.NaN; // conversion scale factor for saving in pA
 
     private final Color defaultColor = new Color(153, 0, 51);
 
@@ -47,11 +61,13 @@ public class Source extends ParamVector {
 
     @Override
     public String units(String name) {
-
-        //if (name.equalsIgnoreCase("Qmax")) {
-            //return project.concUnits + "/" + project.timeUnits;
-        //}
+        if (name.equalsIgnoreCase("Q")) {
+            return project.concUnits + "/" + project.timeUnits;
+        }
         if (name.equalsIgnoreCase("Ctotal")) {
+            return project.concUnits;
+        }
+        if (name.equalsIgnoreCase("Cvoxel")) {
             return project.concUnits;
         }
         if (name.equalsIgnoreCase("Ntotal")) {
@@ -60,24 +76,26 @@ public class Source extends ParamVector {
         if (name.equalsIgnoreCase("Nvoxel")) {
             return "#";
         }
-        if (name.equalsIgnoreCase("C2I_conversionFactor")) {
-            return project.currentUnits + "/" + project.concUnits;
-        }
         return super.units(name);
     }
 
     @Override
     public boolean canEdit(String name) {
-        //if (name.equalsIgnoreCase("Qmax")) {
-            //return false;
-        //}
+        boolean timer = (pulseTimer != null);
+        if (name.equalsIgnoreCase("type")) {
+            return false;
+        }
+        if (name.equalsIgnoreCase("Q")) {
+            return type.equalsIgnoreCase("Q") && !timer;
+        }
         if (name.equalsIgnoreCase("Ctotal")) {
-            if (pulseTimer != null) {
-                return false; // edit via pulse timer amplitude
-            }
+            return type.equalsIgnoreCase("C") && !timer && !clamp;
+        }
+        if (name.equalsIgnoreCase("Cvoxel")) {
+            return type.equalsIgnoreCase("C") && !timer && clamp;
         }
         if (name.equalsIgnoreCase("Ntotal")) {
-            return false;
+            return type.equalsIgnoreCase("N") && !timer;
         }
         if (name.equalsIgnoreCase("Nvoxel")) {
             return false;
@@ -88,51 +106,41 @@ public class Source extends ParamVector {
         if (name.equalsIgnoreCase("spaceVoxels")) {
             return false;
         }
-        if (name.equalsIgnoreCase("C2I_conversionFactor")) {
-            return false;
-        }
-        if (name.equalsIgnoreCase("currentUnits")) {
-            return false;
-        }
         return super.canEdit(name);
     }
-
-    public Source(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, double onset, double duration, double ctotal) {
-
+    
+    public Source(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, double valueQCN, String TYPE) {
+        
         super(p);
-
-        if (NAME.length() > 0) {
-            name = NAME;
-        } else {
-            name = "Source";
+        
+        if (TYPE.equalsIgnoreCase("Q")) {
+            Q = valueQCN;
+        } else if (TYPE.equalsIgnoreCase("C") || TYPE.equalsIgnoreCase("Ctotal") || TYPE.equalsIgnoreCase("Cclamp")) {
+            if (TYPE.equalsIgnoreCase("Cclamp")) {
+                Cvoxel = valueQCN;
+            } else {
+                Ctotal = valueQCN;
+            }
+        } else if (TYPE.equalsIgnoreCase("N") || TYPE.equalsIgnoreCase("Ntotal")) {
+            Ntotal = valueQCN;
         }
 
-        color = new ColorD3D(name + "_color", defaultColor);
-
-        diffusantNum = DiffusantNum;
-
-        pulseTimer = new PulseTimer(project, onset, duration, ctotal);
-        save = new Save(p);
-
-        Ctotal = ctotal;
-
-        if (c == null) {
-            coordinates = null;
-        } else {
-            coordinates = new CoordinatesVoxels[1];
-            coordinates[0] = new CoordinatesVoxels(p);
-            coordinates[0].matchVoxels(c);
-        }
-
-        init();
-
-        createVector(true); // sets ParamVector
-
+        sourceInit(NAME, DiffusantNum, c, null, TYPE);
+        
     }
 
-    public Source(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt) {
-
+    public Source(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, double onset, double duration, double valueQCN, String TYPE) {
         super(p);
+        pulseTimer = new PulseTimer(project, onset, duration, valueQCN, typeUnits(TYPE));
+        sourceInit(NAME, DiffusantNum, c, pulseTimer, TYPE);
+    }
+
+    public Source(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt, String TYPE) {
+        super(p);
+        sourceInit(NAME, DiffusantNum, c, pt, TYPE);
+    }
+    
+    private void sourceInit(String NAME, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt, String TYPE) {
 
         if (NAME.length() > 0) {
             name = NAME;
@@ -143,55 +151,85 @@ public class Source extends ParamVector {
         color = new ColorD3D(name + "_color", defaultColor);
 
         diffusantNum = DiffusantNum;
+        
+        clamp = TYPE.equalsIgnoreCase("Cclamp");
+        
+        if (TYPE.equalsIgnoreCase("Q")) {
+            type = "Q";
+        } else if (TYPE.equalsIgnoreCase("C") || TYPE.equalsIgnoreCase("Ctotal") || TYPE.equalsIgnoreCase("Cclamp")) {
+            type = "C";
+        } else if (TYPE.equalsIgnoreCase("N") || TYPE.equalsIgnoreCase("Ntotal")) {
+            type = "N";
+        } else if (TYPE.equalsIgnoreCase("K")) {
+            type = "K";
+        } else {
+            error("Source", "type", "bad value" + TYPE);
+        }
 
         pulseTimer = pt;
-        save = new Save(p);
+        pulseTimer.ampUnits = typeUnits(TYPE);
+        
+        save = new Save(project);
 
         if (c == null) {
             coordinates = null;
         } else {
             coordinates = new CoordinatesVoxels[1];
-            coordinates[0] = new CoordinatesVoxels(p);
+            coordinates[0] = new CoordinatesVoxels(project);
             coordinates[0].matchVoxels(c);
         }
 
         init();
-
+        
         createVector(true); // sets ParamVector
-
+        
     }
-
-    public Source(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, double clampValue) {
-
-        super(p);
-
-        if (NAME.length() > 0) {
-            name = NAME;
+    
+    public static String typeUnits(String TYPE) {
+        if (TYPE.equalsIgnoreCase("Q")) {
+            return "mM/ms";
+        } else if (TYPE.equalsIgnoreCase("C") || TYPE.equalsIgnoreCase("Ctotal") || TYPE.equalsIgnoreCase("Cclamp")) {
+            return "mM";
+        } else if (TYPE.equalsIgnoreCase("N") || TYPE.equalsIgnoreCase("Ntotal")) {
+            return "#";
+        } else if (TYPE.equalsIgnoreCase("K")) {
+            return "1/ms";
         } else {
-            name = "Source";
+            return "";
+        }
+    }
+    
+    public void init() {
+        
+        double q_dt, charge;
+
+        if (save != null) {
+            save.init();
+            saveFileName();
+            saveDimensions();
+            if (clamp) {
+                saveSelect = "mM";
+            }
         }
 
-        color = new ColorD3D(name + "_color", defaultColor);
+        setParamError("diffusantNum", null);
 
-        diffusantNum = DiffusantNum;
+        diffusantName = project.diffusantName(diffusantNum);
 
-        pulseTimer = null;
-        save = new Save(p);
-
-        Ctotal = clampValue;
-        clamp = true;
-
-        if (c == null) {
-            coordinates = null;
-        } else {
-            coordinates = new CoordinatesVoxels[1];
-            coordinates[0] = new CoordinatesVoxels(p);
-            coordinates[0].matchVoxels(c);
+        if (!project.checkDiffusantNum(diffusantNum)) {
+            error("init", "diffusantNum", "out of range");
         }
+        
+        liters();
+        
+        q_dt = 1.0 / project.dt; // mM/ms // unit flux
+        charge = project.diffusants[diffusantNum].charge;
 
-        init();
+        C2I = Utility.Q2I(q_dt, charge, liters); // conversion scale factor
 
-        createVector(true); // sets ParamVector
+        updateCoordinates();
+        scaleQ10();
+        updateStats();
 
     }
 
@@ -389,26 +427,9 @@ public class Source extends ParamVector {
         }
 
     }
-
-    public void init() {
-
-        if (save != null) {
-            save.init();
-            saveFileName();
-            saveDimensions();
-        }
-
-        setParamError("diffusantNum", null);
-
-        diffusantName = project.diffusantName(diffusantNum);
-
-        if (!project.checkDiffusantNum(diffusantNum)) {
-            error("init", "diffusantNum", "out of range");
-        }
-
-        updateCoordinates();
-        updateStats();
-
+    
+    public void scaleQ10() {
+        // see SourceUptake
     }
 
     public int numVoxels() {
@@ -418,182 +439,195 @@ public class Source extends ParamVector {
             return voxels;
         }
     }
+    
+    public double liters() {
+        liters = Utility.litersPerVoxel(project.dx) * numVoxels();
+        return liters;
+    }
 
     public void updateStats() {
-        double charge;
-        double molesTotal, sumAmp, sumDuration;
-
-        double litersPerVoxel = Utility.litersPerVoxel(project.dx);
-        int numVoxels = numVoxels();
         
-        String initSelect = "Ctotal"; // this is fixed to Ctotal now
+        double molesTotal, numVoxels;
 
         if (clamp) {
-            //Qmax = Double.NaN;
-            // Ctotal is used for clamping
+
+            Ctotal = Double.NaN;
             Ntotal = Double.NaN;
             Nvoxel = Double.NaN;
-            updateVectors();
-            return;
-        }
+            Q = Double.NaN;
 
-        charge = project.diffusants[diffusantNum].charge;
-
-        C2I_conversionFactor = 1e12 * charge * Utility.FARADAY * litersPerVoxel / project.dt; // convert mM to pA
-
-        if (pulseTimer != null) {
-
-            sumAmp = pulseTimer.sumAmplitude();
-            sumDuration = pulseTimer.sumDuration();
-
-            molesTotal = molesTotal(initSelect, sumAmp, sumDuration);
-            //Ctotal = 1e3 * molesTotal / (numVoxels * litersPerVoxel);
-            Ctotal = sumAmp;
-            Ntotal = molesTotal * Utility.AVOGADRO; // molecules
-            Nvoxel = Ntotal / numVoxels;
-            //Qmax = Ctotal / sumDuration;
-
-        } else if (initSelect.equalsIgnoreCase("Qmax")) { // mM/ms
-
-            //molesTotal = molesTotal(initSelect, Qmax, project.simTime);
-            //Ctotal = 1e3 * molesTotal / (numVoxels * litersPerVoxel);
-            //Ntotal = molesTotal * Utility.AVOGADRO; // molecules
-            //Nvoxel = Ntotal / numVoxels;
-            //Qmax = Ctotal / project.simTime;
-
-        } else if (initSelect.equalsIgnoreCase("Ctotal")) { // mM, M = moles/L
-
-            molesTotal = molesTotal(initSelect, Ctotal, project.simTime);
-            //Ctotal = 1e3 * molesTotal / (numVoxels * litersPerVoxel);
-            Ntotal = molesTotal * Utility.AVOGADRO; // molecules
-            Nvoxel = Ntotal / numVoxels;
-            //Qmax = Ctotal / project.simTime;
-
-        } else if (initSelect.equalsIgnoreCase("Ntotal")) {
-
-            molesTotal = molesTotal(initSelect, Ntotal, project.simTime);
-            Ctotal = 1e3 * molesTotal / (numVoxels * litersPerVoxel);
-            //Ntotal = molesTotal * Utility.AVOGADRO; // molecules
-            Nvoxel = Ntotal / numVoxels;
-            //Qmax = Ctotal / project.simTime;
-
-        } else if (initSelect.equalsIgnoreCase("Nvoxel")) {
-
-            molesTotal = molesTotal(initSelect, Nvoxel, project.simTime);
-            Ctotal = 1e3 * molesTotal / (numVoxels * litersPerVoxel);
-            Ntotal = molesTotal * Utility.AVOGADRO; // molecules
-            //Nvoxel = Ntotal / numVoxels;
-            //Qmax = Ctotal / project.simTime;
-
-        }
-
-        updateVectors();
-
-    }
-
-    public double molesTotal(String select, double amp, double time) {
-
-        double litersPerVoxel = Utility.litersPerVoxel(project.dx);
-        int numVoxels = numVoxels();
-
-        if (select.equalsIgnoreCase("Qmax")) { // mM/ms
-            return (amp * 1e-3) * numVoxels * litersPerVoxel * time;
-        } else if (select.equalsIgnoreCase("Ctotal")) { // mM, M = moles/L
-            return (amp * 1e-3) * numVoxels * litersPerVoxel;
-        } else if (select.equalsIgnoreCase("Ntotal")) { // #
-            return amp / Utility.AVOGADRO;
-        } else if (select.equalsIgnoreCase("Nvoxel")) { // #
-            return (amp / Utility.AVOGADRO) * numVoxels;
-        }
-
-        return Double.NaN;
-
-    }
-
-    public void initPulseTimer() {
-
-        if ((pulseTimer == null) || (pulseTimer.pulses == null)) {
-
-            init();
-
-            if (clamp) {
-                Cvoxel = Ctotal;
-            } else {
-                Cvoxel = Ctotal / project.simPoints(); // spread evenly across each dt
+            if (pulseTimer != null) {
+                Cvoxel = Double.NaN; // use pulse timer amplitude
             }
+
+            updateVectors();
+
+            return;
+
+        }
+        
+        if (type.equalsIgnoreCase("K")) {
+            
+            Ctotal = Double.NaN;
+            Cvoxel = Double.NaN;
+            Ntotal = Double.NaN;
+            Nvoxel = Double.NaN;
+            Q = Double.NaN;
+            
+            updateVectors();
 
             return;
             
         }
-
-        Cvoxel = Double.NaN;
-
-        pulseTimer.initTimer();
+        
+        numVoxels = numVoxels();
+        
+        if (pulseTimer != null) {
+            
+            Ctotal = 0;
+            Ntotal = 0;
+            Q = 0;
+            
+            for (Pulse p : pulseTimer.pulses) {
+                molesTotal = molesTotal(type, p.amplitude, p.duration);
+                Ctotal += 1e3 * molesTotal / liters; // mM
+                Ntotal += molesTotal * Utility.AVOGADRO; // molecules
+                Q += (1e3 * molesTotal / liters) / p.duration; // mM/ms
+            }
+            
+        } else if (type.equalsIgnoreCase("Q")) { // mM/ms
+            molesTotal = molesTotal(type, Q, project.simTime);
+            Ctotal = 1e3 * molesTotal / liters; // mM
+            Ntotal = molesTotal * Utility.AVOGADRO; // molecules
+            //Q = Ctotal / project.simTime;
+        } else if (type.equalsIgnoreCase("C")) { // mM, M = moles/L
+            molesTotal = molesTotal(type, Ctotal, project.simTime);
+            //Ctotal = 1e3 * molesTotal / liters; // mM
+            Ntotal = molesTotal * Utility.AVOGADRO; // molecules
+            Q = Ctotal / project.simTime;
+        } else if (type.equalsIgnoreCase("N")) {
+            molesTotal = molesTotal(type, Ntotal, project.simTime);
+            Ctotal = 1e3 * molesTotal / liters; // mM
+            //Ntotal = molesTotal * Utility.AVOGADRO; // molecules
+            Q = Ctotal / project.simTime;
+        } else {
+            Ctotal = Double.NaN;
+            Ntotal = Double.NaN;
+            Q = Double.NaN;
+        }
+        
+        Cvoxel = Ctotal / numVoxels;
+        Nvoxel = Ntotal / numVoxels;
 
         updateVectors();
 
     }
+    
+    public double molesTotal(String TYPE, double valueQCN, double time_ms) {
+        if (TYPE.equalsIgnoreCase("Q")) { // mM/ms
+            return (valueQCN * 1e-3) * liters * time_ms;
+        } else if (TYPE.equalsIgnoreCase("C") || TYPE.equalsIgnoreCase("Ctotal")) { // mM, M = moles/L
+            return (valueQCN * 1e-3) * liters;
+        } else if (TYPE.equalsIgnoreCase("N") || TYPE.equalsIgnoreCase("Ntotal")) { // #
+            return valueQCN / Utility.AVOGADRO;
+        } else {
+            return Double.NaN;
+        }
+    }
 
-    public double cvoxel(Pulse p) { // NOT USED ANYMORE
-        double litersPerVoxel = Utility.litersPerVoxel(project.dx);
-        int numVoxels = numVoxels();
-        double molesTotal = molesTotal("Ctotal", p.amplitude, p.duration);
-        double ctotal = 1e3 * molesTotal / (numVoxels * litersPerVoxel); // mM
+    public void initPulseTimer() {
+        
+        boolean normalizeAmplitudesPerDT = !clamp;
+        
+        if (pulseTimer == null) {
+            // no timer, source is active for all time
 
-        double cvoxel = ctotal / (p.itend - p.itbgn + 1); // spread evenly across pulse
+            init();
 
-        return cvoxel;
+            if (clamp) {
+                Cvoxel_dt = Cvoxel;
+            } else {
+                Cvoxel_dt = Cvoxel / project.simPoints(); // spread evenly across each dt
+            }
+
+            return;
+
+        }
+        
+        // init PulseTimer...
+        
+        Cvoxel_dt = Double.NaN;
+        
+        for (Pulse p : pulseTimer.pulses) {
+            p.update_it_params(normalizeAmplitudesPerDT);
+            p.it_amp = cVoxel(type, p.it_amp, p.duration); // mM
+        }
+        
+        pulseTimer.initTimer(normalizeAmplitudesPerDT, false);
+        
+        updateVectors();
+
+    }
+    
+    public double cVoxel(String TYPE, double valueQCN, double time_ms) {
+
+        double molesTotal;
+        double ctotal = Double.NaN; // mM
+
+        if (TYPE.equalsIgnoreCase("Q")) { // mM/ms
+            ctotal = valueQCN * time_ms;
+        } else if (TYPE.equalsIgnoreCase("C") || TYPE.equalsIgnoreCase("Ctotal")) { // mM, M = moles/L
+            ctotal = valueQCN;
+        } else if (TYPE.equalsIgnoreCase("N") || TYPE.equalsIgnoreCase("Ntotal")) { // #
+            molesTotal = valueQCN / Utility.AVOGADRO;
+            ctotal = 1e3 * molesTotal / liters;
+        }
+
+        if (clamp) {
+            return ctotal;
+        } else {
+            return ctotal / (1.0 * numVoxels());
+        }
 
     }
 
     public double release(RunFiniteDifference fd, Geometry geometry) {
-        double cvoxel, c2, cdelta = 0;
+        double c, c2, cdelta = 0;
 
-        if (spaceVoxels == 0) {
+        if (fd.it >= fd.itmax) {
             return 0;
         }
-
-        if ((fd.diffus == null) || (fd.it >= fd.itmax)) {
-            return 0;
-        }
-
-        if ((pulseTimer == null) || (pulseTimer.pulses == null)) {
-            cvoxel = Cvoxel; // source is on for all time
+        
+        if (pulseTimer == null) {
+            c = Cvoxel_dt; // source is on for all time
         } else {
-            cvoxel = pulseTimer.high(fd.it);
+            c = pulseTimer.high(fd.it);
         }
 
-        if (cvoxel > 0) {
+        if (c >= 0) { // include 0 for clamp
 
             if (fd.diffus[0].length == 1) { // single compartment
 
                 if (clamp) {
-                    c2 = cvoxel - fd.diffus[diffusantNum][0];
-                    fd.diffus[diffusantNum][0] = cvoxel;
+                    c2 = c - fd.diffus[diffusantNum][0];
+                    fd.diffus[diffusantNum][0] = c;
                     cdelta = c2;
                 } else {
-                    fd.diffus[diffusantNum][0] += cvoxel;
-                    cdelta = cvoxel;
+                    fd.diffus[diffusantNum][0] += c;
+                    cdelta = c;
                 }
 
             } else {
 
-                //if (indexRFD == null) {
-                    //Master.exit("Source error: coordinates index array has not be initialized.");
-                    //return 0;
-                //}
-
                 for (int i : indexRFD) {
-
                     if (clamp) {
-                        c2 = cvoxel - fd.diffus[diffusantNum][i];
-                        fd.diffus[diffusantNum][i] = cvoxel;
+                        c2 = c - fd.diffus[diffusantNum][i];
+                        fd.diffus[diffusantNum][i] = c;
                         cdelta += c2;
                     } else {
-                        fd.diffus[diffusantNum][i] += cvoxel;
-                        cdelta += cvoxel;
+                        fd.diffus[diffusantNum][i] += c;
+                        cdelta += c;
                     }
-
                 }
 
             }
@@ -609,7 +643,7 @@ public class Source extends ParamVector {
     public double displayValue(int xVoxel, int yVoxel, int zVoxel) {
 
         if (isInside(xVoxel, yVoxel, zVoxel)) {
-            return Ctotal;
+            return Cvoxel;
         }
 
         return -1;
@@ -618,7 +652,7 @@ public class Source extends ParamVector {
     public Color displayColor(int xVoxel, int yVoxel, int zVoxel, double min, double max) {
 
         if ((color != null) && isInside(xVoxel, yVoxel, zVoxel)) {
-            return color.getColor(Ctotal, min, max);
+            return color.getColor(Cvoxel, min, max);
         }
 
         return null;
@@ -666,6 +700,10 @@ public class Source extends ParamVector {
         }
 
         save.xdim = project.timeUnits;
+        
+        if (clamp) {
+            saveSelect = "mM";
+        }
 
         if ((diffusantName == null) || (diffusantName.length() == 0)) {
             save.ydim = saveSelect;
@@ -697,14 +735,14 @@ public class Source extends ParamVector {
 
     }
 
-    public boolean saveValue(double value) {
+    public boolean saveValue(double value_mM) {
 
         if (saveSelect.equalsIgnoreCase("mM/ms")) {
-            return save.saveData(value / project.dt);
+            return save.saveData(value_mM / project.dt);
         } else if (saveSelect.equalsIgnoreCase("mM")) {
-            return save.saveData(value); // this varies depending on dt
+            return save.saveData(value_mM); // this varies depending on dt (except clamping)
         } else if (saveSelect.equalsIgnoreCase("pA")) {
-            return save.saveData(value * C2I_conversionFactor);
+            return save.saveData(C2I * value_mM);
         }
 
         return false;
@@ -813,13 +851,6 @@ public class Source extends ParamVector {
         }
 
     }
-    
-    public void setCtotal(double ntotal) {
-        double molesTotal = ntotal / Utility.AVOGADRO;
-        double litersPerVoxel = Utility.litersPerVoxel(project.dx);
-        Ctotal = 1e3 * molesTotal / (numVoxels() * litersPerVoxel);
-        updateStats();
-    }
 
     // do not use this function directly, use set() instead
     @Override
@@ -874,11 +905,31 @@ public class Source extends ParamVector {
             }
             return SetDiffusantNum((int) v);
         }
+        if (n.equalsIgnoreCase("Q")) {
+            if (v < 0) {
+                return false;
+            }
+            Q = v;
+            type = "Q";
+            init();
+            return true;
+        }
         if (n.equalsIgnoreCase("Ctotal")) {
             if (v < 0) {
                 return false;
             }
             Ctotal = v;
+            type = "C";
+            init();
+            return true;
+        }
+        if (n.equalsIgnoreCase("Cvoxel")) {
+            if (v < 0) {
+                return false;
+            }
+            Cvoxel = v;
+            type = "C";
+            clamp = true;
             init();
             return true;
         }
@@ -886,20 +937,16 @@ public class Source extends ParamVector {
             if (v < 0) {
                 return false;
             }
-            setCtotal(v);
-            init();
-            return true;
-        }
-        if (n.equalsIgnoreCase("Nvoxel")) {
-            if (v < 0) {
-                return false;
-            }
-            setCtotal(v * numVoxels());
+            Ntotal = v;
+            type = "N";
             init();
             return true;
         }
         if (n.equalsIgnoreCase("clamp")) {
             clamp = (v == 1);
+            if (clamp) {
+                type = "C";
+            }
             init();
             return true;
         }
@@ -947,16 +994,12 @@ public class Source extends ParamVector {
             return SetDiffusantName(s);
         }
         if (n.equalsIgnoreCase("saveSelect")) {
-            if (saveSelect.equalsIgnoreCase("mM/ms")) {
+            if (s.equalsIgnoreCase("mM/ms") || s.equalsIgnoreCase("mM") || s.equalsIgnoreCase("pA")) {
                 saveSelect = s;
-            } else if (saveSelect.equalsIgnoreCase("mM")) {
-                saveSelect = s;
-            } else if (saveSelect.equalsIgnoreCase("pA")) {
-                saveSelect = s;
+                return true;
             } else {
                 return false;
             }
-            return true;
         }
         return super.setMyParams(o, s);
     }

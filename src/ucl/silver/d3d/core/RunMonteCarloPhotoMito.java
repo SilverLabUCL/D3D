@@ -6,12 +6,12 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class RunMonteCarloPhotoMito extends RunMonteCarloPhoto {
     //
@@ -102,7 +102,7 @@ public class RunMonteCarloPhotoMito extends RunMonteCarloPhoto {
 
         if (mito_ijkselect == -2) {
 
-            d = mt.nextDouble();
+            d = Master.mt.nextDouble();
 
             if (d < 0.3333333333) {
                 mito_ijkselect = 0; // xy plane
@@ -122,13 +122,13 @@ public class RunMonteCarloPhotoMito extends RunMonteCarloPhoto {
 
             for (int itrial = 0; itrial < itrialMax; itrial++) {
 
-                x = geometry.x1 + mt.nextDouble() * (geometry.x2 - geometry.x1);
-                y = geometry.y1 + mt.nextDouble() * (geometry.y2 - geometry.y1);
-                z = geometry.z1 + mt.nextDouble() * (geometry.z2 - geometry.z1);
+                x = geometry.x1 + Master.mt.nextDouble() * (geometry.x2 - geometry.x1);
+                y = geometry.y1 + Master.mt.nextDouble() * (geometry.y2 - geometry.y1);
+                z = geometry.z1 + Master.mt.nextDouble() * (geometry.z2 - geometry.z1);
 
                 if (mito_ijkselect == -1) {
 
-                    d = mt.nextDouble(); // random orientation
+                    d = Master.mt.nextDouble(); // random orientation
 
                     if (d < 0.3333333333) {
                         mito_ijkselect = 0;
@@ -298,44 +298,44 @@ public class RunMonteCarloPhotoMito extends RunMonteCarloPhoto {
                 break;
             }
 
-            for (DiffusantVesicles d : diffusants) {
+            for (DiffusantParticles d : diffusants) {
 
                 if (d == null) {
                     continue;
                 }
 
-                for (DiffusantVesicle v : d.vesicles) {
+                for (DiffusantParticle p : d.particles) {
 
-                    if (v == null) {
+                    if (p == null) {
                         continue;
                     }
 
-                    if (!v.insideGeometry) {
+                    if (!p.insideGeometry) {
                         continue;
                     }
 
-                    if (m.isInside(v.x, v.y, v.z, v.radius)) {
+                    if (m.isInside(p.x, p.y, p.z, p.radius)) {
                         continue;
                     }
 
                     switch (m.shapeNum) {
 
                         case 2: // cylinderx
-                            dy = v.y - m.yCenter;
-                            dz = v.z - m.zCenter;
+                            dy = p.y - m.yCenter;
+                            dz = p.z - m.zCenter;
                             h = Math.sqrt(dy * dy + dz * dz);
                             radiusMito = (m.y2 - m.y1) * 0.5;
                             break;
 
                         case 3: // cylindery
-                            dx = v.x - m.xCenter;
-                            dz = v.z - m.zCenter;
+                            dx = p.x - m.xCenter;
+                            dz = p.z - m.zCenter;
                             h = Math.sqrt(dx * dx + dz * dz);
                             radiusMito = (m.x2 - m.x1) * 0.5;
                             break;
                         case 4: // cylinderz
-                            dx = v.x - m.xCenter;
-                            dy = v.y - m.yCenter;
+                            dx = p.x - m.xCenter;
+                            dy = p.y - m.yCenter;
                             h = Math.sqrt(dx * dx + dy * dy);
                             radiusMito = (m.x2 - m.x1) * 0.5;
                             break;
@@ -346,8 +346,8 @@ public class RunMonteCarloPhotoMito extends RunMonteCarloPhoto {
 
                     h -= radiusMito;
 
-                    b1avg += hydroWall_ll(v.radius, h);
-                    b2avg += hydroWall_T(v.radius, Math.abs(h - v.radius));
+                    b1avg += hydroWall_ll(p.radius, h);
+                    b2avg += hydroWall_T(p.radius, Math.abs(h - p.radius));
                     count++;
 
                 }
@@ -369,7 +369,7 @@ public class RunMonteCarloPhotoMito extends RunMonteCarloPhoto {
     }
     
     @Override
-    public boolean testOverlap(DiffusantVesicle v) {
+    public boolean testOverlap(DiffusantParticle p) {
         
         if (mito == null) {
             return false;
@@ -379,7 +379,7 @@ public class RunMonteCarloPhotoMito extends RunMonteCarloPhoto {
             if (m == null) {
                 break;
             }
-            if (m.isInside(v.x, v.y, v.z, v.radius)) {
+            if (m.isInside(p.x, p.y, p.z, p.radius)) {
                 return true;
             }
         }

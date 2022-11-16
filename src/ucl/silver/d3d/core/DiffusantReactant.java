@@ -6,47 +6,50 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class DiffusantReactant extends Diffusant {
 
     // [a] + [b] = [ab]
     //
-    // cTotal = [a] + [ab]
+    // Ctotal = [a] + [ab]
     //
     // d[ab]/dt = [a][b]kon - [ab]koff
     // d[a]/dt = d[b]/dt = -d[ab]/dt
     //
     // this Diffusant represents [ab]
-    // [a] is not saved, but can be computed as [a] = cTotal - [ab]
+    // [a] is not saved, but can be computed as [a] = Ctotal - [ab]
     //
     public String bDiffusantName = null; // diffusant name for [b]
     public int bDiffusantNum = -1; // diffusant number for [b]
     public int abDiffusantNum; // this diffusant
 
-    public double cTotal; // [a] + [ab] (mM)
+    public double Ctotal; // [a] + [ab] (mM)
 
-    public double kon; // on reaction rate (1/(mM*ms))
-    public double koff; // off reaction rate (1/ms)
-    public double kd; // mM
+    public double Kon; // on reaction rate (1/(mM*ms))
+    public double Koff; // off reaction rate (1/ms)
+    public double Kd; // mM // Kd = Koff / Kon;
+    
+    public Q10 Q10_Kon = null; // Q10 temperature scaling for Kon
+    public Q10 Q10_Koff = null; // Q10 temperature scaling for Koff
 
     @Override
     public String units(String name) {
-        if (name.equalsIgnoreCase("cTotal")) {
+        if (name.equalsIgnoreCase("Ctotal")) {
             return project.concUnits;
         }
-        if (name.equalsIgnoreCase("kon")) {
+        if (name.equalsIgnoreCase("Kon")) {
             return "1/" + project.concUnits + "*" + project.timeUnits;
         }
-        if (name.equalsIgnoreCase("koff")) {
+        if (name.equalsIgnoreCase("Koff")) {
             return "1/" + project.timeUnits;
         }
-        if (name.equalsIgnoreCase("kd")) {
+        if (name.equalsIgnoreCase("Kd")) {
             return project.concUnits;
         }
         return super.units(name);
@@ -57,22 +60,19 @@ public class DiffusantReactant extends Diffusant {
         if (name.equalsIgnoreCase("abDiffusantNum")) {
             return false;
         }
-        if (name.equalsIgnoreCase("kd")) {
-            return false;
-        }
         return super.canEdit(name);
     }
 
     public DiffusantReactant(Project p, String NAME, double CTOTAL, double diffusionConstant, CoordinatesVoxels c,
-            int DiffusantNumB, double Kon, double Koff) {
+            int DiffusantNumB, double KON, double KOFF) {
 
         super(p, NAME, 0, diffusionConstant, c);
 
-        cTotal = CTOTAL;
+        Ctotal = CTOTAL;
         bDiffusantNum = DiffusantNumB;
-        kon = Kon;
-        koff = Koff;
-        kd = koff / kon;
+        Kon = KON;
+        Koff = KOFF;
+        Kd = Koff / Kon;
         reaction = true;
 
         createVector(true);
@@ -111,6 +111,31 @@ public class DiffusantReactant extends Diffusant {
         computeC0();
 
     }
+    
+    @Override
+    public void Q10execute() {
+        double kon, koff;
+        super.Q10execute();
+        if ((Q10_Kon != null) && Q10_Kon.on) {
+            kon = Q10_Kon.getScaledValue();
+            if (Double.isFinite(kon)) {
+                Kon = kon;
+            }
+        }
+        if ((Q10_Koff != null) && Q10_Koff.on) {
+            koff = Q10_Koff.getScaledValue();
+            if (Double.isFinite(koff)) {
+                Koff = koff;
+            }
+        }
+        Kd = Koff / Kon;
+    }
+    
+    public void Q10init(double temp) {
+        Q10_D = new Q10(project, "D", D, temp, Q10.Q10_D);
+        Q10_Kon = new Q10(project, "Kon", Kon, temp, Q10.Q10_K);
+        Q10_Koff = new Q10(project, "Koff", Koff, temp, Q10.Q10_K);
+    }
 
     public double computeC0() {
 
@@ -122,9 +147,9 @@ public class DiffusantReactant extends Diffusant {
 
             b = project.diffusants[bDiffusantNum];
 
-            kd = koff / kon;
+            Kd = Koff / Kon;
 
-            C0 = cTotal * b.C0 / (b.C0 + kd); // initial value of [ab]
+            C0 = Ctotal * b.C0 / (b.C0 + Kd); // initial value of [ab]
 
             if (C0 < 0) {
                 error("computeC0", "C0", "out of range: " + C0);
@@ -190,9 +215,9 @@ public class DiffusantReactant extends Diffusant {
 
         ab = fd.diffus[abNum][ipnt];
         b = fd.diffus[bDiffusantNum][ipnt];
-        a = cTotal - ab;
+        a = Ctotal - ab;
 
-        d_ab = (a * b * kon - ab * koff) * project.dt;
+        d_ab = (a * b * Kon - ab * Koff) * project.dt;
         d_b = -d_ab;
         
         fd.diffnext[abNum][ipnt] += d_ab;
@@ -206,6 +231,67 @@ public class DiffusantReactant extends Diffusant {
         if (fd.diffnext[bDiffusantNum][ipnt] < 0) {
             error("react", "fd.diffnext[bDiffusantNum]", "negative concentration for diffusant #" + bDiffusantNum);
             fd.stopSimulation();
+        }
+
+    }
+    
+    @Override
+    public boolean addUser(ParamVector pv) {
+
+        super.addUser(pv);
+        
+        if (Q10_Kon != null) {
+            Q10_Kon.addUser(pv);
+        }
+        
+        if (Q10_Koff != null) {
+            Q10_Koff.addUser(pv);
+        }
+
+        return true;
+
+    }
+
+    @Override
+    public boolean createVector(boolean close) {
+
+        if (!super.createVector(false)) {
+            return false;
+        }
+        
+        if (Q10_Kon != null) {
+            addBlankParam();
+            Q10_Kon.createVector(true);
+            addVector(Q10_Kon.getVector());
+            Q10_Kon.addUser(this);
+        }
+        
+        if (Q10_Koff != null) {
+            addBlankParam();
+            Q10_Koff.createVector(true);
+            addVector(Q10_Koff.getVector());
+            Q10_Koff.addUser(this);
+        }
+
+        if (close){
+            closeVector();
+        }
+
+        return true;
+
+    }
+
+    @Override
+    public void updateVector(ParamObject[] v) {
+
+        super.updateVector(v);
+        
+        if (Q10_Kon != null) {
+            Q10_Kon.updateVector(v);
+        }
+        
+        if (Q10_Koff != null) {
+            Q10_Koff.updateVector(v);
         }
 
     }
@@ -224,11 +310,11 @@ public class DiffusantReactant extends Diffusant {
 
         String n = o.getName();
 
-        if (n.equalsIgnoreCase("cTotal")) {
+        if (n.equalsIgnoreCase("Ctotal")) {
             if (v < 0) {
                 return false;
             }
-            cTotal = v;
+            Ctotal = v;
             init();
             updateVectors();
             return true;
@@ -239,25 +325,70 @@ public class DiffusantReactant extends Diffusant {
             }
             return SetDiffusantNumB((int) v);
         }
-        if (n.equalsIgnoreCase("kon")) {
+        if (n.equalsIgnoreCase("Kon")) {
+            
             if (v < 0) {
                 return false;
             }
-            kon = v;
-            kd = koff / kon;
+            
+            Kon = v;
+            //Kd = Koff / Kon;
+            Koff = Kon * Kd;
+            
+            if (Q10_Kon != null) {
+                Q10_Kon.value = v;
+            }
+            
+            if (Q10_Koff != null) {
+                Q10_Koff.value = v;
+            }
+            
             init();
             updateVectors();
             return true;
+            
         }
-        if (n.equalsIgnoreCase("koff")) {
+        if (n.equalsIgnoreCase("Koff")) {
+            
             if (v < 0) {
                 return false;
             }
-            koff = v;
-            kd = koff / kon;
+            
+            Koff = v;
+            //Kd = Koff / Kon;
+            Kon = Koff / Kd;
+            
+            if (Q10_Kon != null) {
+                Q10_Kon.value = v;
+            }
+            
+            if (Q10_Koff != null) {
+                Q10_Koff.value = v;
+            }
+            
             init();
             updateVectors();
             return true;
+            
+        }
+        if (n.equalsIgnoreCase("Kd")) {
+            
+            if (v < 0) {
+                return false;
+            }
+            
+            Kd = v;
+            Kon = Koff / Kd;
+            //Koff = Kon * Kd;
+            
+            if (Q10_Kon != null) {
+                Q10_Kon.value = v;
+            }
+            
+            init();
+            updateVectors();
+            return true;
+            
         }
         return super.setMyParams(o, v);
     }

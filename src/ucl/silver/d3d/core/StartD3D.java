@@ -10,12 +10,12 @@ import java.util.Date;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 2.0
+ * @version 2.1
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,9 +38,9 @@ public class StartD3D {
 
     public StartD3D(String[] args) {
 
-        boolean showGUI = true;
         boolean runSimulation = false;
         boolean packFrame = false;
+        long seed = -1;
 
         Master.startDate = new Date(System.currentTimeMillis());
 
@@ -56,7 +56,7 @@ public class StartD3D {
 
         String[] splitStr;
 
-        String[] testing = new String[9];
+        String[] testing = new String[7];
         testing[0] = "-MonteCarlo";
         testing[1] = "-Project.simTime";
         testing[2] = "1.2";
@@ -71,23 +71,23 @@ public class StartD3D {
 
         //testing[6] = "-Geometry.cubeWidth";
         //testing[7] = "2.4";
-        //testing[4] = "-Vesicles.D";
-        //testing[5] = "0.2";
+        //testing[5] = "-Particles.D";
+        //testing[6] = "0.2";
         //testing[6] = "-Detector0.PSF.numericalAperture";
         //testing[7] = "0.7";
 
         //testing[0] = "-init";
         //testing[1] = "InitMC_Frap_Jason.initMonteCarloActiveZone";
-        //testing[2] = "-Vesicles.D";
+        //testing[2] = "-Particles.D";
         //testing[3] = "8.250E-5";
         //testing[4] = "-Geometry.cubeWidth";
         //testing[5] = "2.0";
-        //testing[6] = "-Vesicles.setImmobilePercent";
+        //testing[6] = "-Particles.setImmobilePercent";
         //testing[7] = "0.1875";
-        //testing[5] = "-MonteCarlo.minVesicleStep";
+        //testing[5] = "-MonteCarlo.minParticleStep";
         //testing[6] = "0.003";
-        testing[7] = "-MonteCarlo.MSDspatialTbgn";
-        testing[8] = "100";
+        //testing[7] = "-MonteCarlo.MSDspatialTbgn";
+        //testing[8] = "100";
         //testing[5] = "-MonteCarlo.azHemisphere";
         //testing[6] = "1";
         //testing[10] = "-Project.Directory";
@@ -95,7 +95,7 @@ public class StartD3D {
         //testing[12] = "-Project.Folder";
         //testing[13] = "c20_d080_im18p75_0";
 
-        //args = testing;
+        //args = testing; // THIS ALLOWS TESTING args
 
         if ((args != null) && (args.length > 0)) {
 
@@ -113,7 +113,7 @@ public class StartD3D {
                     printUsageAndQuit();
                 } else if (args[i].equalsIgnoreCase("-noGUI")) {
                     System.out.println("Starting without GUI");
-                    showGUI = false;
+                    Master.showGUI = false;
                 } else if (args[i].equalsIgnoreCase("-run")) {
                     System.out.println("Auto-run simulation");
                     runSimulation = true;
@@ -165,8 +165,9 @@ public class StartD3D {
         startupArgsInitProject = getClassStartupArgs(startupArgs, "InitProject");
 
         Master.createProject(projectType, "", startupArgsProject);
+        Master.initMersenneTwister();
 
-        if (showGUI) {
+        if (Master.showGUI) {
             Master.initMainFrame(packFrame);
         }
 
@@ -188,7 +189,7 @@ public class StartD3D {
         Master.resetAllParamVectors();
         Master.project.init();
 
-        if (showGUI && (Master.mainframe != null)) {
+        if (Master.showGUI && (Master.mainframe != null)) {
 
             if (Master.mainframe.panelParams != null) {
                 if (Master.project.errors != null) {

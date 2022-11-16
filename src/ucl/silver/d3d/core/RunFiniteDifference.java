@@ -9,19 +9,26 @@ import ucl.silver.d3d.gui.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class RunFiniteDifference
         extends ParamVector implements Runnable {
+    
+    public double stability = 0.4; // stability factor for dt computation ( see below )
+    // Note, stability is only for diffusion, not reactions
+    // For simulations with reactions, stability factor may have to be reduced
+    // Set stability = Double.NaN to stop dt computation
+    
+    public double maxD = 0; // max diffusion coefficient of all diffusants ( see maxD() )
+    public double maxC0 = 0; // maximum concentration (mM) of diffusants ( see maxC0() )
 
     private transient Geometry geometry;
-    private transient Grid grid; // Panel2D voxelGrid
-    private transient Diffusant[] diffusants;
+    public transient Grid grid; // Panel2D voxelGrid
 
     public transient double[][] diffus = null; // array of diffusant particles
     public transient double[][] diffnext = null; // array of diffusant particles next time step
@@ -50,7 +57,6 @@ public class RunFiniteDifference
     private transient boolean detectorsExist = false;
     private transient boolean batchesExist = false;
 
-    public transient boolean error = false;
     private transient boolean loop = false;
     private transient boolean initialized = false;
     private transient boolean preview = false;
@@ -60,9 +66,40 @@ public class RunFiniteDifference
     private transient StopWatch timer2 = null;
     
     private transient final int indexLimitRFD = 10000;
+    
+    @Override
+    public String units(String name) {
+        if (name.equalsIgnoreCase("maxD")) {
+            return project.spaceUnits + "^2/" + project.timeUnits;
+        }
+        if (name.equalsIgnoreCase("maxC0")) {
+            return project.concUnits;
+        }
+        return super.units(name);
+    }
+    
+    @Override
+    public String help(String name) {
+        if (name.equalsIgnoreCase("stabilityFD")) {
+            return "used to compute dt, dt=(stabilityFD*dx*dx/(3*maxD);";
+        }
+        if (name.equalsIgnoreCase("maxD")) {
+            return "maximum diffusion constant, used to compute dt";
+        }
+        if (name.equalsIgnoreCase("maxC0")) {
+            return "maximum initial concentration";
+        }
+        return super.help(name);
+    }
 
     @Override
     public boolean canEdit(String name) {
+        if (name.equalsIgnoreCase("maxD")) {
+            return false;
+        }
+        if (name.equalsIgnoreCase("maxC0")) {
+            return false;
+        }
         if (name.equalsIgnoreCase("thisPnt")) {
             return false;
         }
@@ -87,32 +124,68 @@ public class RunFiniteDifference
 
     public boolean init() {
 
-        error = false;
-
         if (project.numBatches() > 0) {
             batchesExist = true;
         }
+        
+        maxC0();
+        maxD();
+        
+        if ((maxD > 0) && Double.isFinite(stability) && (stability > 0)){
+            project.dt = (stability * project.dx * project.dx) / (3 * maxD); // "Mathematics of Diffusion", J. Crank, p. 151, Eq. 8.50
+        } else {
+            project.dt = Double.NaN;
+        }
 
-        return error;
+        return false;
+
+    }
+    
+    public double maxC0() {
+        
+        maxC0 = 0;
+
+        if (project.diffusants == null) {
+            return Double.NaN;
+        }
+
+        for (Diffusant d : project.diffusants) {
+            if (!(d instanceof DiffusantParticles)) {
+                maxC0 = Math.max(maxC0, d.C0);
+            }
+        }
+
+        return maxC0;
 
     }
 
-    public void startSimulation(boolean PREVIEW) {
+    public double maxD() {
 
-        preview = PREVIEW;
+        maxD = 0;
 
-        if (error) {
-            error("error in initializing Finite Difference simulation variables.");
-            return;
+        if (project.diffusants == null) {
+            return Double.NaN;
         }
 
-        geometry = project.geometry;
-        diffusants = project.diffusants;
-        grid = Master.grid();
+        for (Diffusant d : project.diffusants) {
+            if (!(d instanceof DiffusantParticles)) {
+                maxD = Math.max(maxD, d.D);
+            }
+        }
 
+        return maxD;
+
+    }
+
+    public void startSimulation(boolean PREVIEW, boolean startThread) {
+
+        preview = PREVIEW;
         loop = true;
-        thrd = new Thread(this);
-        thrd.start(); // this calls run() below
+
+        if (startThread) {
+            thrd = new Thread(this);
+            thrd.start(); // this calls run() below
+        }
 
     }
 
@@ -127,8 +200,9 @@ public class RunFiniteDifference
     }
 
     public boolean initSimulation() {
-
-        long pnts;
+        
+        geometry = project.geometry;
+        grid = Master.grid();
 
         timer1 = new StopWatch();
         timer2 = new StopWatch();
@@ -172,7 +246,7 @@ public class RunFiniteDifference
             createArrays();
         }
         
-        if (preview) {
+        if (preview && (grid != null)) {
             grid.preview = true;
             grid.diffusant = diffus;
             Master.mainframe.panel2D.displayModeSet("Diffusant.0"); // set display to "Diffusant"
@@ -185,7 +259,7 @@ public class RunFiniteDifference
 
         Master.log("initialized Finite Difference simulation: " + it);
 
-        return error;
+        return false;
 
     }
 
@@ -197,11 +271,13 @@ public class RunFiniteDifference
         boolean isSpace;
 
         Master.log("creating Finite Difference simulation arrays...");
-
-        if (diffusants == null) {
-            error = true;
-            return true;
+        
+        if (project.diffusants == null) {
+            error("createArrays", "diffusants", "no diffusants");
+            return true; // no FD diffusants
         }
+        
+        Diffusant[] diffusants = project.diffusants;
 
         if (useCompactArrays) {
             vmax = geometry.spaceVoxels;
@@ -243,13 +319,13 @@ public class RunFiniteDifference
 
                             diffus[ii][I] = diffusants[ii].getConcentration(i, j, k);
 
-                            if (diffusants[ii].getPSF() != null) {
+                            if (diffusants[ii].psf != null) {
 
-                                psf[ii][I] = diffusants[ii].getPSF().getValue(i, j, k);
+                                psf[ii][I] = diffusants[ii].psf.getValue(i, j, k);
 
                                 if ((i == xVoxels - 1) && (j == yVoxels - 1) &&
                                         (k == zVoxels - 1)) {
-                                    diffusants[ii].getPSF().getValue(-1, -1, -1); // closes external file if they have been opened
+                                    diffusants[ii].psf.getValue(-1, -1, -1); // closes external file if they have been opened
                                 }
 
                             }
@@ -311,9 +387,9 @@ public class RunFiniteDifference
         }
 
         for (int i = 0; i < diffusants.length; i++) {
-            if (diffusants[i].getPSF() != null) {
-                Master.log("diffusant #" + i + ", computed voxels: " +
-                        diffusants[i].getPSF().computedValues);
+            if (diffusants[i].psf != null) {
+                Master.log("diffusant #" + i + ", computed PSF voxels: " +
+                        diffusants[i].psf.computedValues);
             }
         }
 
@@ -386,7 +462,7 @@ public class RunFiniteDifference
                 for (int k = c.zVoxel1; k <= c.zVoxel2; k++) {
                     for (int j = c.yVoxel1; j <= c.yVoxel2; j++) {
                         for (int i = c.xVoxel1; i <= c.xVoxel2; i++) {
-                            if (project.geometry.isSpace(i, j, k) && project.sources[is].isInside(i, j, k)) {
+                            if (geometry.isSpace(i, j, k) && project.sources[is].isInside(i, j, k)) {
                                 if (noOverlaps) {
                                     if (!project.insideAnySource(i, j, k, is)) {
                                         count++;
@@ -423,14 +499,14 @@ public class RunFiniteDifference
                 for (int k = c.zVoxel1; k <= c.zVoxel2; k++) {
                     for (int j = c.yVoxel1; j <= c.yVoxel2; j++) {
                         for (int i = c.xVoxel1; i <= c.xVoxel2; i++) {
-                            if (project.geometry.isSpace(i, j, k) && project.sources[is].isInside(i, j, k)) {
+                            if (geometry.isSpace(i, j, k) && project.sources[is].isInside(i, j, k)) {
                                 if (noOverlaps) {
                                     if (!project.insideAnySource(i, j, k, is)) {
-                                        project.sources[is].indexRFD[count] = project.geometry.space[i][j][k];
+                                        project.sources[is].indexRFD[count] = geometry.space[i][j][k];
                                         count++;
                                     }
                                 } else {
-                                    project.sources[is].indexRFD[count] = project.geometry.space[i][j][k];
+                                    project.sources[is].indexRFD[count] = geometry.space[i][j][k];
                                     count++;
                                 }
                             }
@@ -446,18 +522,27 @@ public class RunFiniteDifference
 
     public boolean createArraysSingleCompartment() {
 
-        int count;
+        int count = 0;
+        
+        if (project.diffusants == null) {
+            error("createArrays", "diffusants", "no diffusants");
+            return true; // no FD diffusants
+        }
+        
+        Diffusant[] diffusants = project.diffusants;
 
-        if (diffusants == null) {
-            error = true;
-            return true;
+        for (int i = 0; i < count; i++) {
+            if (project.diffusants[i] instanceof DiffusantParticles) {
+                continue; // skip MC
+            }
+            diffusants[i] = project.diffusants[i];
         }
 
         fastArrayAccess = false;
 
-        diffus = new double[diffusants.length][1];
-        diffnext = new double[diffusants.length][1];
-        psf = new double[diffusants.length][1];
+        diffus = new double[count][1];
+        diffnext = new double[count][1];
+        psf = new double[count][1];
 
         thisPnt = 0;
 
@@ -482,7 +567,7 @@ public class RunFiniteDifference
                 diffus[ii][thisPnt] /= count;
             }
 
-            if (diffusants[ii].getPSF() != null) {
+            if (diffusants[ii].psf != null) {
 
                 count = 0;
 
@@ -491,12 +576,12 @@ public class RunFiniteDifference
                         for (int i = 0; i < xVoxels; i++) {
 
                             if (geometry.simpleCuboid || geometry.isSpace(i, j, k)) {
-                                psf[ii][thisPnt] += diffusants[ii].getPSF().getValue(i, j, k);
+                                psf[ii][thisPnt] += diffusants[ii].psf.getValue(i, j, k);
                                 count++;
                             }
 
                             if ((i == xVoxels - 1) && (j == yVoxels - 1) && (k == zVoxels - 1)) {
-                                diffusants[ii].getPSF().getValue(-1, -1, -1); // closes external file if they have been opened
+                                diffusants[ii].psf.getValue(-1, -1, -1); // closes external file if they have been opened
                             }
 
                         }
@@ -512,9 +597,9 @@ public class RunFiniteDifference
         }
 
         for (int ii = 0; ii < diffusants.length; ii++) {
-            if (diffusants[ii].getPSF() != null) {
+            if (diffusants[ii].psf != null) {
                 Master.log("diffusant #" + ii + ", computed PSF voxels: " +
-                        diffusants[ii].getPSF().computedValues);
+                        diffusants[ii].psf.computedValues);
             }
         }
 
@@ -531,10 +616,9 @@ public class RunFiniteDifference
 
         while (loop) { // loop thru batches
 
-            if (!error && !initialized) {
+            if (!initialized) {
 
                 if (project.simulationInit(preview)) {
-                    error = true;
                     stopSimulation(); // ERROR
                 } else if (initSimulation()) {
                     stopSimulation(); // ERROR
@@ -547,41 +631,7 @@ public class RunFiniteDifference
             }
 
             while (loop && (it < itmax)) {
-
-                for (Diffusant d : diffusants) {
-                    d.save();
-                }
-
-                if (sourcesExist) {
-                    for (Source s : project.sources) {
-                        s.release(this, geometry);
-                    }
-                }
-
-                if (detectorsExist) {
-                    for (Detector d : project.detectors) {
-                        d.detect(this, geometry);
-                    }
-                }
-
-                if ((grid != null) && preview) {
-                    grid.repaint();
-                    
-                }
-
-                if (singleCompartment) {
-                    diffuseReactSingleCompartment();
-                } else if (fastArrayAccess) {
-                    diffuseReactFast();
-                } else {
-                    diffuseReact();
-                }
-
-                it++; // next time step
-                time = it * project.dt;
-
-                timer2.timer(time);
-
+                runDT();
             }
 
             if (it >= itmax) {
@@ -590,6 +640,44 @@ public class RunFiniteDifference
 
         }
 
+    }
+    
+    public void runDT() {
+        
+        for (Diffusant d : project.diffusants) {
+            if (!(d instanceof DiffusantParticles)) {
+                d.save();
+            }
+        }
+
+        if (sourcesExist) {
+            for (Source s : project.sources) {
+                s.release(this, geometry);
+            }
+        }
+
+        if (detectorsExist) {
+            for (Detector d : project.detectors) {
+                d.detect(this, geometry);
+            }
+        }
+
+        if (preview && (grid != null)) {
+            grid.repaint();
+        }
+
+        if (singleCompartment) {
+            diffuseReactSingleCompartment();
+        } else if (fastArrayAccess) {
+            diffuseReactFast();
+        } else {
+            diffuseReact();
+        }
+        
+        it++; // next time step
+        time = it * project.dt;
+        timer2.timer(time);
+                
     }
 
     public void diffuseReact() {
@@ -605,9 +693,13 @@ public class RunFiniteDifference
 
                         thisPnt = geometry.space[i][j][k];
 
-                        for (int ii = 0; ii < diffus.length; ii++) { // diffusion
+                        for (int ii = 0; ii < project.diffusants.length; ii++) { // diffusion
+                            
+                            if (project.diffusants[ii] instanceof DiffusantParticles) {
+                                continue; // skip MC
+                            }
 
-                            if (diffusants[ii].h <= 0) {
+                            if (project.diffusants[ii].h <= 0) {
 
                                 diffnext[ii][thisPnt] = diffus[ii][thisPnt];
 
@@ -651,7 +743,7 @@ public class RunFiniteDifference
                                 }
 
                                 diffnext[ii][thisPnt] = diffus[ii][thisPnt] +
-                                        diffusants[ii].h *
+                                        project.diffusants[ii].h *
                                         (d - sum[thisPnt] * diffus[ii][thisPnt]);
 
                             }
@@ -659,7 +751,7 @@ public class RunFiniteDifference
 
                         if (reactionsExist) {
                             for (int ii = 0; ii < diffus.length; ii++) {
-                                diffusants[ii].react(this, ii);
+                                project.diffusants[ii].react(this, ii);
                             }
                         }
 
@@ -689,9 +781,13 @@ public class RunFiniteDifference
 
                         thisPnt = geometry.space[i][j][k];
 
-                        for (int ii = 0; ii < diffus.length; ii++) { // diffusion
+                        for (int ii = 0; ii < project.diffusants.length; ii++) { // diffusion
+                            
+                            if (project.diffusants[ii] instanceof DiffusantParticles) {
+                                continue; // skip MC
+                            }
 
-                            if (diffusants[ii].h <= 0) {
+                            if (project.diffusants[ii].h <= 0) {
 
                                 diffnext[ii][thisPnt] = diffus[ii][thisPnt];
 
@@ -735,7 +831,7 @@ public class RunFiniteDifference
                                 }
 
                                 diffnext[ii][thisPnt] = diffus[ii][thisPnt] +
-                                        diffusants[ii].h *
+                                        project.diffusants[ii].h *
                                         (d - sum[thisPnt] * diffus[ii][thisPnt]);
 
                             }
@@ -743,7 +839,7 @@ public class RunFiniteDifference
 
                         if (reactionsExist) {
                             for (int ii = 0; ii < diffus.length; ii++) {
-                                diffusants[ii].react(this, ii);
+                                project.diffusants[ii].react(this, ii);
                             }
                         }
 
@@ -769,8 +865,11 @@ public class RunFiniteDifference
         }
 
         if (reactionsExist) {
-            for (int ii = 0; ii < diffus.length; ii++) {
-                diffusants[ii].react(this, ii);
+            for (int ii = 0; ii < project.diffusants.length; ii++) {
+                if (project.diffusants[ii] instanceof DiffusantParticles) {
+                    continue; // skip MC
+                }
+                project.diffusants[ii].react(this, ii);
             }
         }
 
@@ -806,9 +905,12 @@ public class RunFiniteDifference
             }
         }
 
-        for (int i = 0; i < diffusants.length; i++) {
-            diffusants[i].saveConcentration(this, geometry, i); // save final concentration values
-            diffusants[i].coordinates().indexRFD = null;
+        for (int i = 0; i < project.diffusants.length; i++) {
+            if (project.diffusants[i] instanceof DiffusantParticles) {
+                continue; // skip MC
+            }
+            project.diffusants[i].saveConcentration(this, geometry, i); // save final concentration values
+            project.diffusants[i].coordinates().indexRFD = null;
         }
 
         geometry.checkSpace(); // reset array values to -1 and +1
@@ -826,8 +928,10 @@ public class RunFiniteDifference
         km = null;
         kp = null;
 
-        grid.diffusant = null;
-        grid.repaint();
+        if (grid != null) {
+            grid.diffusant = null;
+            grid.repaint();
+        }
 
         finished = true;
 
@@ -837,7 +941,7 @@ public class RunFiniteDifference
             loop = false;
         }
 
-        if (!loop) {
+        if (!loop && (grid != null)) {
             grid.preview = false;
         }
 
@@ -899,6 +1003,15 @@ public class RunFiniteDifference
 
         if (!(o.paramVector instanceof RunFiniteDifference)) {
             return false;
+        }
+        
+        if (n.equalsIgnoreCase("stability")) {
+            if (v <= 0) {
+                return false;
+            }
+            stability = v;
+            init();
+            return true;
         }
 
         if (n.equalsIgnoreCase("useCompactArrays")) {

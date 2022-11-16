@@ -6,12 +6,12 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class PulseTimer extends ParamVector {
 
@@ -20,10 +20,13 @@ public class PulseTimer extends ParamVector {
     public boolean useTimerArray = true; // create timer array to be used during simulations
     // this is faster than looping thru each pulse on each time step
     // but creates an array of data equal to number of simulation points
+    // which could be large depending on time step and simulation length
+    
+    public String ampUnits = ""; // amplitude units for all pulses
 
     public Pulse[] pulses = null;
 
-    public double[] timer = null; // pulse array used during simulations
+    public double[] timer = null; // pulse array used during simulations if useTimerArray = true
 
     @Override
     public boolean canEdit(String name) {
@@ -46,15 +49,17 @@ public class PulseTimer extends ParamVector {
         super(p);
         add(TIME, DURATION);
     }
-
-    public PulseTimer(Project p, double TIME, double DURATION, double AMPLITUDE) {
+    
+    public PulseTimer(Project p, double TIME, double DURATION, double AMPLITUDE, String AMPUNITS) {
         super(p);
+        ampUnits = AMPUNITS;
         add(TIME, DURATION, AMPLITUDE);
     }
 
-    public PulseTimer(Project p, double TIME, double DURATION, double AMPLITUDE, int numPulses, double pulseInterval) {
+    public PulseTimer(Project p, double TIME, double DURATION, double AMPLITUDE, String AMPUNITS, int numPulses, double pulseInterval) {
         super(p);
         addTrain(TIME, DURATION, AMPLITUDE, numPulses, pulseInterval);
+        ampUnits = AMPUNITS;
     }
 
     public final int add(double TIME) {
@@ -100,58 +105,37 @@ public class PulseTimer extends ParamVector {
         pulses = newArray; // replace old array with new one
 
         numPulses = pulses.length;
+        
+        for (int j = 0 ; j < pulses.length; j++) {
+            pulses[j].name = "pulse" + j;
+        }
 
         //Master.log("Added pulse #" + i);
         return i;
 
     }
 
-    public double sumAmplitude() {
-        double sum = 0;
+    public final void initTimer(boolean normalizeAmplitudePerDT, boolean updatePulses) {
 
-        if (pulses == null) {
-            return Double.NaN;
-        }
-
-        for (Pulse p : pulses) {
-            sum += p.amplitude;
-        }
-
-        return sum;
-
-    }
-
-    public double sumDuration() {
-        double sum = 0;
-
-        if (pulses == null) {
-            return Double.NaN;
-        }
-
-        for (Pulse p : pulses) {
-            sum += p.duration;
-        }
-
-        return sum;
-
-    }
-
-    public final void initTimer() {
-
-        int itmax = project.simPoints();
+        int itmax, itbgn, itend;
+        
         timer = null;
 
-        if (pulses == null) {
+        if ((pulses == null) || (pulses.length == 0)) {
             return;
         }
 
-        for (Pulse p : pulses) {
-            p.update();
+        if (updatePulses) {
+            for (Pulse p : pulses) {
+                p.update_it_params(normalizeAmplitudePerDT); // update it_bgn, it_end, it_amp
+            }
         }
 
         if (!useTimerArray) {
             return;
         }
+        
+        itmax = project.simPoints();
 
         if (itmax <= 0) {
             return;
@@ -160,9 +144,14 @@ public class PulseTimer extends ParamVector {
         timer = new double[itmax];
 
         for (Pulse p : pulses) {
-            for (int it = p.itbgn; it <= p.itend; it++) {
-                timer[it] += p.amp;
+
+            itbgn = Math.max(p.it_bgn, 0);
+            itend = Math.min(p.it_end, timer.length - 1);
+
+            for (int it = itbgn; it <= itend; it++) {
+                timer[it] += p.it_amp;
             }
+
         }
 
     }
@@ -174,13 +163,13 @@ public class PulseTimer extends ParamVector {
             return timer[itime];
         }
 
-        if (pulses == null) {
+        if ((pulses == null) || (pulses.length == 0)) {
             return 0;
         }
 
         for (Pulse p : pulses) {
-            if ((itime >= p.itbgn) && (itime <= p.itend)) {
-                sumAmp += p.amp;
+            if ((itime >= p.it_bgn) && (itime <= p.it_end)) {
+                sumAmp += p.it_amp;
             }
         }
 
@@ -260,6 +249,10 @@ public class PulseTimer extends ParamVector {
             useTimerArray = (v == 1);
             return true;
         }
+        //if (n.equalsIgnoreCase("normalizeAmplitudesPerDT")) {
+            //normalizeAmplitudesPerDT = (v == 1);
+            //return true;
+        //}
 
         return super.setMyParams(o, v);
 

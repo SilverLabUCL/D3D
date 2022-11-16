@@ -6,64 +6,70 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class DiffusantParvalbuminCa extends Diffusant {
 
     // [PB-Mg] = [Mg] + [PB] + [Ca] = [PB-Ca]
     //
-    // cTotal = [PB-Mg] + [PB] + [PB-Ca]
+    // Ctotal = [PB-Mg] + [PB] + [PB-Ca]
     //
-    // d[PB]/dt = [PB-Mg]k1off - [PB][Mg]k1on - [PB][Ca]k2on + [PB-Ca]k2off
-    // d[PB-Mg]dt = [PB][Mg]k1on - [PB-Mg]k1off
-    // d[PB-Ca]/dt = [PB][Ca]k2on - [PB-Ca]k2off
+    // d[PB]/dt = [PB-Mg]K1off - [PB][Mg]K1on - [PB][Ca]K2on + [PB-Ca]K2off
+    // d[PB-Mg]dt = [PB][Mg]K1on - [PB-Mg]K1off
+    // d[PB-Ca]/dt = [PB][Ca]K2on - [PB-Ca]K2off
     //
     // this Diffusant represents product [PB-Ca]
-    // [PB-Mg] is not saved, but can be computed from: cTotal = [PB-Mg] + [PB] + [PB-Ca]
+    // [PB-Mg] is not saved, but can be computed from: Ctotal = [PB-Mg] + [PB] + [PB-Ca]
     // from Eggermann and Jonas 2012
     // "How the ‘slow’ Ca2+ buffer parvalbumin affects transmitter release in nanodomain-coupling regimes"
     // VOLUME 15 | NUMBER 1 | JANUARY 2012 nature neuroscience
+    // Room Temperature 22-24C
     //
     public int iMg = -1; // diffusant number for free Mg
     public int iCa = -1; // diffusant number for free Ca
     public int iPB = -1; // diffusant number for free parvalbumin
     public int iPBCa = -1; // this diffusant
     
-    public double cTotal; // total concentration of parvalbumin (mM)
+    public double Ctotal; // total concentration of parvalbumin (mM)
 
-    public double k1on = 1; // on reaction rate (1/(mM*ms))
-    public double k1off = 0.03; // off reaction rate (1/ms)
-    public double k2on = 400; // on reaction rate (1/(mM*ms))
-    public double k2off = 0.004; // off reaction rate (1/ms)
-    public double kd1 = k1off / k1on;
-    public double kd2 = k2off / k2on;
+    public double K1on = 1; // on reaction rate (1/(mM*ms))
+    public double K1off = 0.03; // off reaction rate (1/ms)
+    public double K2on = 400; // on reaction rate (1/(mM*ms))
+    public double K2off = 0.004; // off reaction rate (1/ms)
+    public double Kd1 = K1off / K1on;
+    public double Kd2 = K2off / K2on;
+    
+    public Q10 Q10_K1on = null; // Q10 temperature scaling for K1on
+    public Q10 Q10_K1off = null; // Q10 temperature scaling for K1off
+    public Q10 Q10_K2on = null; // Q10 temperature scaling for K2on
+    public Q10 Q10_K2off = null; // Q10 temperature scaling for K2off
 
     @Override
     public String units(String name) {
-        if (name.equalsIgnoreCase("cTotal")) {
+        if (name.equalsIgnoreCase("Ctotal")) {
             return project.concUnits;
         }
-        if (name.equalsIgnoreCase("k1on")) {
+        if (name.equalsIgnoreCase("K1on")) {
             return "1/" + project.concUnits + "*" + project.timeUnits;
         }
-        if (name.equalsIgnoreCase("k1off")) {
+        if (name.equalsIgnoreCase("K1off")) {
             return "1/" + project.timeUnits;
         }
-        if (name.equalsIgnoreCase("k2on")) {
+        if (name.equalsIgnoreCase("K2on")) {
             return "1/" + project.concUnits + "*" + project.timeUnits;
         }
-        if (name.equalsIgnoreCase("k2off")) {
+        if (name.equalsIgnoreCase("K2off")) {
             return "1/" + project.timeUnits;
         }
-        if (name.equalsIgnoreCase("kd1")) {
+        if (name.equalsIgnoreCase("Kd1")) {
             return project.concUnits;
         }
-        if (name.equalsIgnoreCase("kd2")) {
+        if (name.equalsIgnoreCase("Kd2")) {
             return project.concUnits;
         }
         return super.units(name);
@@ -74,10 +80,10 @@ public class DiffusantParvalbuminCa extends Diffusant {
         if (name.equalsIgnoreCase("iPBCa")) {
             return false;
         }
-        if (name.equalsIgnoreCase("kd1")) {
+        if (name.equalsIgnoreCase("Kd1")) {
             return false;
         }
-        if (name.equalsIgnoreCase("kd2")) {
+        if (name.equalsIgnoreCase("Kd2")) {
             return false;
         }
         return super.canEdit(name);
@@ -88,7 +94,7 @@ public class DiffusantParvalbuminCa extends Diffusant {
 
         super(p, NAME, 0, diffusionConstant, c);
 
-        cTotal = CTOTAL;
+        Ctotal = CTOTAL;
         iMg = IMG;
         iCa = ICA;
         iPB = IPB;
@@ -104,16 +110,16 @@ public class DiffusantParvalbuminCa extends Diffusant {
 
         super(p, NAME, 0, diffusionConstant, c);
 
-        cTotal = CTOTAL;
+        Ctotal = CTOTAL;
         iMg = IMG;
         iCa = ICA;
         iPB = IPB;
-        k1on = K1ON;
-        k1off = K1OFF;
-        k2on = K2ON;
-        k2off = K2OFF;
-        kd1 = k1off / k1on;
-        kd2 = k2off / k2on;
+        K1on = K1ON;
+        K1off = K1OFF;
+        K2on = K2ON;
+        K2off = K2OFF;
+        Kd1 = K1off / K1on;
+        Kd2 = K2off / K2on;
 
         reaction = true;
 
@@ -163,6 +169,38 @@ public class DiffusantParvalbuminCa extends Diffusant {
         computeC0();
 
     }
+    
+    @Override
+    public void Q10execute() {
+        double k1on, k1off, k2on, k2off;
+        super.Q10execute();
+        if ((Q10_K1on != null) && Q10_K1on.on) {
+            k1on = Q10_K1on.getScaledValue();
+            if (Double.isFinite(k1on)) {
+                K1on = k1on;
+            }
+        }
+        if ((Q10_K1off != null) && Q10_K1off.on) {
+            k1off = Q10_K1off.getScaledValue();
+            if (Double.isFinite(k1off)) {
+                K1off = k1off;
+            }
+        }
+        if ((Q10_K2on != null) && Q10_K2on.on) {
+            k2on = Q10_K2on.getScaledValue();
+            if (Double.isFinite(k2on)) {
+                K2on = k2on;
+            }
+        }
+        if ((Q10_K2off != null) && Q10_K2off.on) {
+            k2off = Q10_K2off.getScaledValue();
+            if (Double.isFinite(k2off)) {
+                K2off = k2off;
+            }
+        }
+        Kd1 = K1off / K1on;
+        Kd2 = K2off / K2on;
+    }
 
     public double computeC0() {
 
@@ -170,8 +208,8 @@ public class DiffusantParvalbuminCa extends Diffusant {
 
         Diffusant Mg, Ca, PB;
 
-        kd1 = k1off / k1on;
-        kd2 = k2off / k2on;
+        Kd1 = K1off / K1on;
+        Kd2 = K2off / K2on;
         C0 = Double.NaN;
 
         if ((iMg >= 0) && (iMg < project.diffusants.length)) {
@@ -182,11 +220,11 @@ public class DiffusantParvalbuminCa extends Diffusant {
                     Ca = project.diffusants[iCa];
                     PB = project.diffusants[iPB];
 
-                    r1 = Mg.C0 * kd2 / (Ca.C0 * kd1);
-                    r2 = ((r1 * k1off + k2off) / (Mg.C0 * k1on + Ca.C0 * k2on)) + r1 + 1;
-                    C0 = cTotal / r2;
+                    r1 = Mg.C0 * Kd2 / (Ca.C0 * Kd1);
+                    r2 = ((r1 * K1off + K2off) / (Mg.C0 * K1on + Ca.C0 * K2on)) + r1 + 1;
+                    C0 = Ctotal / r2;
 
-                    PB.C0 = C0 * k2off / (Ca.C0 * k2on);
+                    PB.C0 = C0 * K2off / (Ca.C0 * K2on);
 
                 }
             }
@@ -214,11 +252,11 @@ public class DiffusantParvalbuminCa extends Diffusant {
         Ca = fd.diffus[iCa][ipnt];
         PB = fd.diffus[iPB][ipnt];
         PBCa = fd.diffus[iPBCA][ipnt];
-        PBMg = (cTotal - PB - PBCa);
+        PBMg = (Ctotal - PB - PBCa);
 
-        dPB = (PBMg * k1off - PB * Mg * k1on - PB * Ca * k2on + PBCa * k2off) * project.dt;
-        dPBMg = (PB * Mg * k1on - PBMg * k1off) * project.dt;
-        dPBCa = (PB * Ca * k2on - PBCa * k2off) * project.dt;
+        dPB = (PBMg * K1off - PB * Mg * K1on - PB * Ca * K2on + PBCa * K2off) * project.dt;
+        dPBMg = (PB * Mg * K1on - PBMg * K1off) * project.dt;
+        dPBCa = (PB * Ca * K2on - PBCa * K2off) * project.dt;
 
         dMg = -dPBMg;
         dCa = -dPBCa;
@@ -249,6 +287,97 @@ public class DiffusantParvalbuminCa extends Diffusant {
         }
 
     }
+    
+    @Override
+    public boolean addUser(ParamVector pv) {
+
+        super.addUser(pv);
+        
+        if (Q10_K1on != null) {
+            Q10_K1on.addUser(pv);
+        }
+        
+        if (Q10_K1off != null) {
+            Q10_K1off.addUser(pv);
+        }
+        
+        if (Q10_K2on != null) {
+            Q10_K2on.addUser(pv);
+        }
+        
+        if (Q10_K2off != null) {
+            Q10_K2off.addUser(pv);
+        }
+
+        return true;
+
+    }
+
+    @Override
+    public boolean createVector(boolean close) {
+
+        if (!super.createVector(false)) {
+            return false;
+        }
+        
+        if (Q10_K1on != null) {
+            addBlankParam();
+            Q10_K1on.createVector(true);
+            addVector(Q10_K1on.getVector());
+            Q10_K1on.addUser(this);
+        }
+        
+        if (Q10_K1off != null) {
+            addBlankParam();
+            Q10_K1off.createVector(true);
+            addVector(Q10_K1off.getVector());
+            Q10_K1off.addUser(this);
+        }
+        
+        if (Q10_K2on != null) {
+            addBlankParam();
+            Q10_K2on.createVector(true);
+            addVector(Q10_K2on.getVector());
+            Q10_K2on.addUser(this);
+        }
+        
+        if (Q10_K2off != null) {
+            addBlankParam();
+            Q10_K2off.createVector(true);
+            addVector(Q10_K2off.getVector());
+            Q10_K2off.addUser(this);
+        }
+
+        if (close){
+            closeVector();
+        }
+
+        return true;
+
+    }
+
+    @Override
+    public void updateVector(ParamObject[] v) {
+
+        super.updateVector(v);
+        
+        if (Q10_K1on != null) {
+            Q10_K1on.updateVector(v);
+        }
+        
+        if (Q10_K1off != null) {
+            Q10_K1off.updateVector(v);
+        }
+        
+        if (Q10_K2on != null) {
+            Q10_K2on.updateVector(v);
+        }
+        
+        if (Q10_K2off != null) {
+            Q10_K2off.updateVector(v);
+        }
+
+    }
 
     // do not use this function directly, use set() instead
     @Override
@@ -264,11 +393,11 @@ public class DiffusantParvalbuminCa extends Diffusant {
 
         String n = o.getName();
 
-        if (n.equalsIgnoreCase("cTotal")) {
+        if (n.equalsIgnoreCase("Ctotal")) {
             if (v < 0) {
                 return false;
             }
-            cTotal = v;
+            Ctotal = v;
             computeC0();
             return true;
         }
@@ -296,35 +425,47 @@ public class DiffusantParvalbuminCa extends Diffusant {
             computeC0();
             return true;
         }
-        if (n.equalsIgnoreCase("k1on")) {
+        if (n.equalsIgnoreCase("K1on")) {
             if (v < 0) {
                 return false;
             }
-            k1on = v;
+            K1on = v;
+            if (Q10_K1on != null) {
+                Q10_K1on.value = v;
+            }
             computeC0();
             return true;
         }
-        if (n.equalsIgnoreCase("k1off")) {
+        if (n.equalsIgnoreCase("K1off")) {
             if (v < 0) {
                 return false;
             }
-            k1off = v;
+            K1off = v;
+            if (Q10_K1off != null) {
+                Q10_K1off.value = v;
+            }
             computeC0();
             return true;
         }
-        if (n.equalsIgnoreCase("k2on")) {
+        if (n.equalsIgnoreCase("K2on")) {
             if (v < 0) {
                 return false;
             }
-            k2on = v;
+            K2on = v;
+            if (Q10_K2on != null) {
+                Q10_K2on.value = v;
+            }
             computeC0();
             return true;
         }
-        if (n.equalsIgnoreCase("k2off")) {
+        if (n.equalsIgnoreCase("K2off")) {
             if (v < 0) {
                 return false;
             }
-            k2off = v;
+            K2off = v;
+            if (Q10_K2off != null) {
+                Q10_K2off.value = v;
+            }
             computeC0();
             return true;
         }

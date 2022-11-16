@@ -6,12 +6,12 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class Batch extends ParamVector {
 
@@ -48,10 +48,7 @@ public class Batch extends ParamVector {
     }
 
     public boolean isString() {
-        if (strValue.length() > 0) {
-            return true;
-        }
-        return false;
+        return (strValue.length() > 0);
     }
 
     public void init() {
@@ -110,7 +107,7 @@ public class Batch extends ParamVector {
             execute = (v == 1);
             return true;
         }
-        return false;
+        return super.setMyParams(o, v);
     }
 
     // do not use this function directly, use set() instead
@@ -136,7 +133,7 @@ public class Batch extends ParamVector {
             folder = s;
             return true;
         }
-        return false;
+        return super.setMyParams(o, s);
     }
 
 }

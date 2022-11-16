@@ -1,17 +1,19 @@
 package ucl.silver.d3d.core;
 
+import ucl.silver.d3d.utils.Utility;
+
 /**
  * <p>
  * Title: D3D</p>
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class SourceNO extends Source {
     
@@ -55,7 +57,7 @@ public class SourceNO extends Source {
     }
 
     public SourceNO(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt) {
-        super(p, NAME, DiffusantNum, c, pt);
+        super(p, NAME, DiffusantNum, c, pt, "Q");
         createVector(true); // sets ParamVector
     }
 
@@ -68,16 +70,14 @@ public class SourceNO extends Source {
     public void updateC() {
 
         double moles;
-        double AN = 6.0221415E23; // Avogadro's number
-        double dx = project.dx;
-        double litersPerVoxel = Math.pow(dx, 3) * 1e-18 * 1000; // liters per voxel
+        double litersPerVoxel = Utility.litersPerVoxel(project.dx);
 
-        moles = M1 / AN;
+        moles = M1 / Utility.AVOGADRO;
         C1 = 1000 * moles / litersPerVoxel; // mM / ms
         C1 /= voxels; // spread evenly between voxels
         C1 *= Cscale; // additional scale factor
 
-        moles = M3 / AN;
+        moles = M3 / Utility.AVOGADRO;
         C3 = 1000 * moles / litersPerVoxel; // mM / ms
         C3 /= voxels; // spread evenly between voxels
         C3 *= Cscale; // additional scale factor

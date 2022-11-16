@@ -9,12 +9,12 @@ import ucl.silver.d3d.utils.Utility;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class Diffusant extends ParamVector {
     
@@ -39,6 +39,8 @@ public class Diffusant extends ParamVector {
     public Save save = null;
     public PSF psf = null; // excitation reaction
     public PulseTimer pulseTimer = null; // excitation reaction
+    
+    public Q10 Q10_D = null; // Q10 temperature scaling for D
     
     public double saveValue = Double.NaN; // the value that saved to data file during simulation
 
@@ -117,28 +119,46 @@ public class Diffusant extends ParamVector {
     }
 
     public void updateCoordinates() {
-        // nothing to do
+        // nothing yet
     }
 
     public void init() {
+        
+        saveFileName();
+        saveDimensions();
 
         if (save != null) {
             save.init();
-            saveFileName();
-            saveDimensions();
+            save.updateVectors();
         }
-
+        
         h = computeH(D);
 
         if (psf != null) {
             psf.init();
         }
+        
+        Q10execute();
 
+    }
+    
+    public void Q10init(double temp) {
+        Q10_D = new Q10(project, "D", D, temp, Q10.Q10_D);
+    }
+    
+    public void Q10execute() {
+        double d;
+        if ((Q10_D != null) && Q10_D.on) {
+            d = Q10_D.getScaledValue();
+            if (Double.isFinite(d)) {
+                D = d;
+            }
+        }
     }
 
     public void initPulseTimer() {
         if (pulseTimer != null) {
-            pulseTimer.initTimer();
+            pulseTimer.initTimer(false, true);
         }
     }
 
@@ -250,10 +270,6 @@ public class Diffusant extends ParamVector {
 
     }
 
-    public PSF getPSF() {
-        return psf;
-    }
-
     public void check() {
         if (psf != null) {
             psf.checkExists();
@@ -261,7 +277,7 @@ public class Diffusant extends ParamVector {
     }
 
     public void react(RunFiniteDifference fd, int abnum) {
-        // no reaction
+        // no reaction yet
     }
 
     public void saveConcentration(RunFiniteDifference fd, Geometry geometry, int dnum) {
@@ -292,35 +308,31 @@ public class Diffusant extends ParamVector {
         return (concentration != null);
     }
 
-    public boolean saveFileName(){
+    public void saveFileName(){
 
-        if (save == null) {
-            return false;
+        if (save != null) {
+            save.fileName(name, "");
         }
-
-        save.fileName(name, "");
-
-        return true;
 
     }
 
     public void saveDimensions() {
 
-        if ((save == null) || (!save.autoDimensions)) {
-            return;
-        }
+        if ((save != null) && save.autoDimensions) {
 
-        save.xdim = project.timeUnits;
+            save.xdim = project.timeUnits;
 
-        if ((name == null) || (name.length() == 0)) {
-            save.ydim = project.concUnits;
-        } else {
-            save.ydim = name + " (" + project.concUnits + ")";
+            if ((name == null) || (name.length() == 0)) {
+                save.ydim = project.concUnits;
+            } else {
+                save.ydim = name + " (" + project.concUnits + ")";
+            }
+            
         }
 
     }
 
-    public boolean saveInit() {
+    public boolean saveInit() { // Project.openDiffusants()
 
         int dataPoints = 1;
 
@@ -332,7 +344,7 @@ public class Diffusant extends ParamVector {
 
     }
 
-    public boolean save() { // should be called from simulation "run" function
+    public boolean save() { // called from simulation "run" function
         
         if (save == null) {
             return false;
@@ -375,6 +387,10 @@ public class Diffusant extends ParamVector {
 
         if (pulseTimer != null) {
             pulseTimer.addUser(pv);
+        }
+        
+        if (Q10_D != null) {
+            Q10_D.addUser(pv);
         }
 
         return true;
@@ -422,6 +438,13 @@ public class Diffusant extends ParamVector {
             addVector(pulseTimer.getVector());
             pulseTimer.addUser(this);
         }
+        
+        if (Q10_D != null) {
+            addBlankParam();
+            Q10_D.createVector(true);
+            addVector(Q10_D.getVector());
+            Q10_D.addUser(this);
+        }
 
         if (close){
             closeVector();
@@ -454,6 +477,10 @@ public class Diffusant extends ParamVector {
 
         if (pulseTimer != null) {
             pulseTimer.updateVector(v);
+        }
+        
+        if (Q10_D != null) {
+            Q10_D.updateVector(v);
         }
 
     }
@@ -488,6 +515,8 @@ public class Diffusant extends ParamVector {
         }
 
         String n = o.getName();
+        
+        
 
         if (n.equalsIgnoreCase("C0")) {
             if (v < 0) {
@@ -500,7 +529,11 @@ public class Diffusant extends ParamVector {
             if (v < 0) {
                 return false;
             }
+            
             D = v;
+            if (Q10_D != null) {
+                Q10_D.value = v;
+            }
             return true;
         }
         if (n.equalsIgnoreCase("charge")) {
@@ -573,4 +606,5 @@ public class Diffusant extends ParamVector {
         //}
         return super.setMyParams(o, s);
     }
+    
 }

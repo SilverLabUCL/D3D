@@ -8,12 +8,12 @@ import java.awt.Color;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class Detector extends ParamVector {
 
@@ -182,7 +182,7 @@ public class Detector extends ParamVector {
 
     public void initPulseTimer() {
         if (pulseTimer != null) {
-            pulseTimer.initTimer();
+            pulseTimer.initTimer(false, true);
         }
     }
 
@@ -272,16 +272,16 @@ public class Detector extends ParamVector {
 
     public void saveDimensions() {
 
-        if ((save == null) || (!save.autoDimensions)) {
-            return;
-        }
+        if ((save != null) && save.autoDimensions) {
 
-        save.xdim = project.timeUnits;
+            save.xdim = project.timeUnits;
 
-        if ((diffusantName == null) || (diffusantName.length() == 0)) {
-            save.ydim = project.concUnits;
-        } else {
-            save.ydim = diffusantName + " (" + project.concUnits + ")";
+            if ((diffusantName == null) || (diffusantName.length() == 0)) {
+                save.ydim = project.concUnits;
+            } else {
+                save.ydim = diffusantName + " (" + project.concUnits + ")";
+            }
+
         }
 
     }
@@ -339,7 +339,7 @@ public class Detector extends ParamVector {
 
     @Override
     public boolean createVector(boolean close) {
-
+        
         if (!super.createVector(false)) {
             return false;
         }

@@ -10,12 +10,12 @@ import ucl.silver.d3d.utils.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class Project extends ParamVector {
 
@@ -25,12 +25,10 @@ public class Project extends ParamVector {
     public String geomFile = null; // geometry file to open
 
     public double simTime = 1; // simulation time (ms)
-    public double dt = 1; // time step (ms), computed below
+    public double dt = 0.1; //Double.NaN; // time step (ms), computed by RunFiniteDifference or RunMonteCarlo
     public double dx = 1; // voxel width (um)
-    public double stability = 0.4; // stability factor for dt computation ( see below )
-
-    public double maxD = 0; // max diffusion coefficient of all diffusants ( see maxD() )
-    public double maxC0 = 0; // maximum concentration (mM) of diffusants ( see maxC0() )
+    
+    public double simTemp = Double.NaN; // simulation temperature // can be used for Q10 scaling
 
     public double saveRate = 100; // sample rate of output files (kHz)
     public double saveDT = 1 / saveRate; // sample rate of output files (ms)
@@ -41,13 +39,17 @@ public class Project extends ParamVector {
     public int batchNum = -1; // file batch number, use negative number (-1) for no batch number
     private int batchCounter = -1; // Batch array counter
 
-    public String seed = ""; // seed for random number generator
+    public String seedMT = ""; // seed for Mersenne Twister random number generator
 
     public String timeUnits = "ms";
     public String freqUnits = "kHz"; // inverse time
-    public String spaceUnits = "um";
+    public String spaceUnits = "μm";
     public String concUnits = "mM";
-    public String currentUnits = "pA";
+    public String currentUnits = "pA"; // nS * mV = pA
+    public String voltUnits = "mV";
+    public String conductanceUnits = "nS";
+    public String resistanceUnits = "GΩ"; // 1 / nS
+    public String tempUnits = "°C"; // temperature
 
     public String directory = ""; // diretory where folder/files are saved
     public String folder = "D3Doutput";
@@ -71,7 +73,7 @@ public class Project extends ParamVector {
 
     public transient StopWatch timer = new StopWatch();
 
-    //public int EM_iseries = 1; // MC AZEM sims
+    public int EM_iseries = 1; // MC AZEM sims
     //public int EM_azSelect = 0; // MC AZEM sims
 
     @Override
@@ -79,17 +81,14 @@ public class Project extends ParamVector {
         if (name.equalsIgnoreCase("simTime")) {
             return timeUnits;
         }
+        if (name.equalsIgnoreCase("simTemp")) {
+            return tempUnits;
+        }
         if (name.equalsIgnoreCase("dt")) {
             return timeUnits;
         }
         if (name.equalsIgnoreCase("dx")) {
             return spaceUnits;
-        }
-        if (name.equalsIgnoreCase("maxD")) {
-            return spaceUnits + "^2/" + timeUnits;
-        }
-        if (name.equalsIgnoreCase("maxC0")) {
-            return concUnits;
         }
         if (name.equalsIgnoreCase("saveRate")) {
             return freqUnits;
@@ -120,20 +119,14 @@ public class Project extends ParamVector {
         if (name.equalsIgnoreCase("simTime")) {
             return "simulation time";
         }
+        if (name.equalsIgnoreCase("simTemp")) {
+            return "simulation temperature";
+        }
         if (name.equalsIgnoreCase("dt")) {
             return "time step";
         }
         if (name.equalsIgnoreCase("dx")) {
             return "voxel cube dimensions";
-        }
-        if (name.equalsIgnoreCase("stability")) {
-            return "used to compute dt, dt=(stability*dx*dx/(3*maxD);";
-        }
-        if (name.equalsIgnoreCase("maxD")) {
-            return "maximum diffusion constant, used to compute dt";
-        }
-        if (name.equalsIgnoreCase("maxC0")) {
-            return "maximum initial concentration";
         }
         if (name.equalsIgnoreCase("timeUnits")) {
             return "time units";
@@ -159,7 +152,10 @@ public class Project extends ParamVector {
         if (name.equalsIgnoreCase("printDT")) {
             return "time step of simulation progress display";
         }
-        return super.units(name);
+        if (name.equalsIgnoreCase("seedMT")) {
+            return "seed for Mersenne Twister random number generator";
+        }
+        return super.help(name);
     }
 
     @Override
@@ -176,13 +172,10 @@ public class Project extends ParamVector {
         if (name.equalsIgnoreCase("geomFile")) {
             return false;
         }
-        if (name.equalsIgnoreCase("maxD")) {
+        if (name.equalsIgnoreCase("dt")) {
             return false;
         }
-        if (name.equalsIgnoreCase("maxC0")) {
-            return false;
-        }
-        return true;
+        return super.canEdit(name);
     }
 
     public Project() {
@@ -278,29 +271,41 @@ public class Project extends ParamVector {
         batches = null;
         errors = null;
     }
+    
+    public void setDirectoryJason() {
+        
+        String os = System.getProperty("os.name");
+        
+        if (os.startsWith("Mac")) {
+            directory = "/Users/jason/Documents/D3D/Simulations/";
+        } else {
+            directory = "/Jason/D3D/Simulations/";
+        }
+        
+    }
 
     public void init() {
 
         setDate();
-
-        maxD = maxD();
-
-        if (maxD > 0){
-            dt = (stability * Math.pow(dx, 2.0)) / (3 * maxD); // "Mathematics of Diffusion", J. Crank, p. 151, Eq. 8.50
-        }
-
+        
         setParamError("dt", null);
         
-        if ((dt <= 0 ) || (Double.isNaN(dt)) || (Double.isInfinite(dt))) {
-            error("Project.init", "dt", "bad value");
-        }
-
         geometry.init();
 
-        if (finiteDifference != null ) {
-            finiteDifference.init();
-        } else if (monteCarlo != null ) {
+        if ((monteCarlo == null) && (finiteDifference == null)) {
+            return;
+        }
+
+        if (monteCarlo != null) {
             monteCarlo.init();
+        }
+        
+        if (finiteDifference != null) {
+            finiteDifference.init();
+        }
+        
+        if ((dt <= 0 ) || (Double.isNaN(dt)) || (Double.isInfinite(dt))) {
+            //error("Project.init", "dt", "bad value");
         }
 
         initDiffusants(-1);
@@ -308,27 +313,11 @@ public class Project extends ParamVector {
         initDetectors(-1);
         initBatches();
 
-        maxC0 = maxC0();
-
         updateVectors();
 
         Master.updateMainFrameTitle();
 
         //Master.log("initialized project: " + name);
-
-    }
-
-    public double maxC0() {
-
-        double max = 0;
-
-        if (diffusants != null) {
-            for (Diffusant d : diffusants) {
-                max = Math.max(max, d.C0);
-            }
-        }
-
-        return max;
 
     }
 
@@ -422,20 +411,6 @@ public class Project extends ParamVector {
     //
     // DIFFUSANT FUNCTIONS
     //
-
-    public double maxD() {
-
-        double max = 0;
-
-        if (diffusants != null) {
-            for (Diffusant d : diffusants) {
-                max = Math.max(max, d.D);
-            }
-        }
-
-        return max;
-
-    }
 
     public boolean reactionExists() {
         if (diffusants != null) {
@@ -626,6 +601,16 @@ public class Project extends ParamVector {
 
         return i;
 
+    }
+    
+    public void killDiffusantsAll() {
+        int i = diffusants.length;
+        diffusants = null;
+        if (i == 1) {
+            Master.log("killed Diffusant #0");
+        } else if (i > 1) {
+            Master.log("killed Diffusants #0-" + i);
+        }
     }
 
     public boolean killDiffusant(int i) {
@@ -865,6 +850,16 @@ public class Project extends ParamVector {
 
         return i;
 
+    }
+    
+    public void killSourcesAll() {
+        int i = sources.length;
+        sources = null;
+        if (i == 1) {
+            Master.log("killed Source #0");
+        } else if (i > 1) {
+            Master.log("killed Sources #0-" + i);
+        }
     }
 
     public boolean killSource(int i) {
@@ -1112,6 +1107,16 @@ public class Project extends ParamVector {
         return i;
 
     }
+    
+    public void killDetectorsAll() {
+        int i = detectors.length;
+        detectors = null;
+        if (i == 1) {
+            Master.log("killed Detector #0");
+        } else if (i > 1) {
+            Master.log("killed Detectors #0-" + i);
+        }
+    }
 
     public boolean killDetector(int i) {
         int k = 0;
@@ -1209,7 +1214,7 @@ public class Project extends ParamVector {
                 b.init();
 
                 if (!paramVectorVariableExists(parameter)) {
-                    b.error("Project.initBatches", "parameter", "does not exist");
+                    b.error("Project.initBatches", parameter, "does not exist");
                 }
 
                 fname = "Batch" + Integer.toString(b.batchNum) + "_" + parameter;
@@ -1314,6 +1319,16 @@ public class Project extends ParamVector {
         return i;
 
     }
+    
+    public void killBatchesAll() {
+        int i = batches.length;
+        batches = null;
+        if (i == 1) {
+            Master.log("killed Batch #0");
+        } else if (i > 1) {
+            Master.log("killed Batches #0-" + i);
+        }
+    }
 
     public boolean killBatch(int i) {
 
@@ -1405,6 +1420,16 @@ public class Project extends ParamVector {
     
     public boolean checkErrorNum(int i) {
         return ((errors != null) && (i >= 0) && (i < errors.length));
+    }
+    
+    public void killErrorsAll() {
+        int i = errors.length;
+        errors = null;
+        if (i == 1) {
+            Master.log("killed Error #0");
+        } else if (i > 1) {
+            Master.log("killed Errors #0-" + i);
+        }
     }
 
     public boolean killError(int i) {
@@ -1511,7 +1536,7 @@ public class Project extends ParamVector {
 
         if (monteCarlo != null) {
 
-            monteCarlo.startSimulation(preview);
+            monteCarlo.startSimulation(preview, true);
 
         } else {
 
@@ -1519,7 +1544,7 @@ public class Project extends ParamVector {
                 finiteDifference = new RunFiniteDifference(this);
             }
 
-            finiteDifference.startSimulation(preview);
+            finiteDifference.startSimulation(preview, true);
 
         }
 
@@ -1846,6 +1871,7 @@ public class Project extends ParamVector {
     }
 
     public String getObjectParamStr(String longName) {
+        int i;
 
         String parent = Utility.parentClass(longName);
         String child = Utility.childClass(longName);
@@ -1945,6 +1971,19 @@ public class Project extends ParamVector {
                         }
                         return d.pulseTimer.getStr(parameter);
                     }
+                    if (child.startsWith("Pulse")) {
+                        
+                        if ((d.pulseTimer == null) || (d.pulseTimer.pulses == null)) {
+                            return null;
+                        }
+                        
+                        i = Pulse.pulseNum(child);
+
+                        if ((i >= 0) && (i < d.pulseTimer.pulses.length)) {
+                            return d.pulseTimer.pulses[i].getStr(parameter);
+                        }
+                        
+                    }
                     if (child.equalsIgnoreCase("PSF")) {
                         if (d.psf == null) {
                             return null;
@@ -1977,6 +2016,19 @@ public class Project extends ParamVector {
                         }
                         return s.pulseTimer.getStr(parameter);
                     }
+                    if (child.startsWith("Pulse")) {
+                        
+                        if ((s.pulseTimer == null) || (s.pulseTimer.pulses == null)) {
+                            return null;
+                        }
+                        
+                        i = Pulse.pulseNum(child);
+
+                        if ((i >= 0) && (i < s.pulseTimer.pulses.length)) {
+                            return s.pulseTimer.pulses[i].getStr(parameter);
+                        }
+                        
+                    }
                     return null;
                 }
             }
@@ -2003,6 +2055,19 @@ public class Project extends ParamVector {
                         }
                         return d.pulseTimer.getStr(parameter);
                     }
+                    if (child.startsWith("Pulse")) {
+                        
+                        if ((d.pulseTimer == null) || (d.pulseTimer.pulses == null)) {
+                            return null;
+                        }
+                        
+                        i = Pulse.pulseNum(child);
+
+                        if ((i >= 0) && (i < d.pulseTimer.pulses.length)) {
+                            return d.pulseTimer.pulses[i].getStr(parameter);
+                        }
+                        
+                    }
                     if (child.equalsIgnoreCase("PSF")) {
                         if (d.psf == null) {
                             return null;
@@ -2019,6 +2084,7 @@ public class Project extends ParamVector {
     }
 
     public boolean setObjectParam(String longName, double value) {
+        int i;
 
         String parent = Utility.parentClass(longName);
         String child = Utility.childClass(longName);
@@ -2152,6 +2218,19 @@ public class Project extends ParamVector {
                             return false;
                         }
                         return s.pulseTimer.set(parameter, value);
+                    }
+                    if (child.startsWith("Pulse")) {
+                        
+                        if ((s.pulseTimer == null) || (s.pulseTimer.pulses == null)) {
+                            return false;
+                        }
+                        
+                        i = Pulse.pulseNum(child);
+
+                        if ((i >= 0) && (i < s.pulseTimer.pulses.length)) {
+                            return s.pulseTimer.pulses[i].set(parameter, value);
+                        }
+                        
                     }
                     return false;
                 }
@@ -2503,7 +2582,6 @@ public class Project extends ParamVector {
             if (v <= 0) {
                 return false;
             }
-            stability = v * 3 * maxD / Math.pow(dx, 2.0);
             init();
             return true;
         }
@@ -2514,19 +2592,18 @@ public class Project extends ParamVector {
             simTime = v;
             return true;
         }
+        if (n.equalsIgnoreCase("simTemp")) {
+            if (v < 0) {
+                return false;
+            }
+            simTemp = v;
+            return true;
+        }
         if (n.equalsIgnoreCase("maxT")) {
             if (v <= 0) {
                 return false;
             }
             simTime = v;
-            return true;
-        }
-        if (n.equalsIgnoreCase("stability")) {
-            if (v <= 0) {
-                return false;
-            }
-            stability = v;
-            init();
             return true;
         }
         if (n.equalsIgnoreCase("saveRate")) {
@@ -2559,6 +2636,13 @@ public class Project extends ParamVector {
         }
         if (n.equalsIgnoreCase("batchNum")) {
             return setBatchNum((int) v);
+        }
+        if (n.equalsIgnoreCase("EM_iseries")) {
+            if (v < 0) {
+                return false;
+            }
+            EM_iseries = (int) v;
+            return true;
         }
         return super.setMyParams(o, v);
     }
@@ -2615,8 +2699,18 @@ public class Project extends ParamVector {
             }
             return true;
         }
-        if (n.equalsIgnoreCase("seed")) {
-            seed = s;
+        if (n.equalsIgnoreCase("seedMT")) {
+            try {
+                if (s.length() > 0) {
+                    Long.parseLong(s); // throws NumberFormatException
+                    seedMT = s;
+                    Master.initMersenneTwister();
+                } else {
+                    seedMT = "";
+                }
+            } catch (NumberFormatException e) {
+                // do nothing
+            }
             return true;
         }
         return super.setMyParams(o, s);

@@ -15,12 +15,12 @@ import java.io.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 2.0
+ * @version 2.1
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,11 +47,12 @@ public final class Master {
 
     public static Project project = null;
     public static MainFrame mainframe = null;
+    public static boolean showGUI = true;
 
     private static Project[] projects = null;
 
-    public static String[] initProjectList = {"InitProject", "InitFD_Demo", "InitMC_Demo"};
-    public static String[] diffusantList = {"Diffusant", "DiffusantCalretinin", "DiffusantCalretininCa", "DiffusantParvalbuminCa", "DiffusantPhoto", "DiffusantReactant", "DiffusantVesicles", "DiffusantVesiclesAZ"};
+    public static String[] initProjectList = {"InitProject", "InitFD_Demo", "InitMC_Demo", "InitMC_Projection_Demo"};
+    public static String[] diffusantList = {"Diffusant", "DiffusantCalretinin", "DiffusantCalretininCa", "DiffusantParvalbuminCa", "DiffusantPhoto", "DiffusantReactant", "DiffusantParticles", "DiffusantVesiclesAZ"};
     public static String[] detectorList = {"Detector", "DetectorAvg", "DetectorDye", "DetectorPSF", "DetectorSnapshot"};
     public static String[] sourceList = {"Source", "SourceGauss", "SourceGamma", "SourceUptake"};
     
@@ -69,7 +70,7 @@ public final class Master {
     public static ColorScaleMagenta colorScaleMagenta = null;
     public static ColorScaleRainbow colorScaleRainbow = null;
 
-    public static BufferedWriter bw1 = null;
+    public static BufferedWriter bw = null;
     private static BufferedWriter bw2 = null;
 
     private static String[] logList = null;
@@ -78,15 +79,18 @@ public final class Master {
 
     public static boolean foundMainStartUpArguments = false;
     
+    public static MersenneTwisterFast mt = null;
+    public static double saveRanGauss = Double.NaN;
+    
     //private static String initClassAndFunction = "InitProject.initCube";
     
     //private static String initClassAndFunction = "InitFD_Demo.initCalciumChannel";
     //private static String initClassAndFunction = "InitFD_Demo.initGlutamateSource";
     //private static String initClassAndFunction = "InitFD_Demo.initGlutamateSourceCleft";
     //private static String initClassAndFunction = "InitFD_Demo.initCrankCylinder";
-    private static String initClassAndFunction = "InitFD_Demo.initCrankCylinderMovie";
+    //private static String initClassAndFunction = "InitFD_Demo.initCrankCylinderMovie";
     //private static String initClassAndFunction = "InitFD_Demo.initCrankPlane";
-    //private static String initClassAndFunction = "InitFD_Demo.initGlomerulus";
+    //private static String initClassAndFunction = "InitFD_Demo.initGlomerulus_Nielsen2004";
     //private static String initClassAndFunction = "InitFD_Demo.initFrapAxelrod";
     //private static String initClassAndFunction = "InitFD_Demo.init_MFT_Scott_Rusakov";
     
@@ -94,24 +98,8 @@ public final class Master {
     //private static String initClassAndFunction = "InitMC_Demo.initFrapMovie";
     //private static String initClassAndFunction = "InitMC_Demo.initFrapMFT";
     //private static String initClassAndFunction = "InitMC_Demo.initActiveZone";
-
-    //private static String initClassAndFunction = "InitFD_Ca_David.initCube";
-    //private static String initClassAndFunction = "InitFD_Ca_David.initCubeHighRes";
-    //private static String initClassAndFunction = "InitFD_Ca_David.initBouton";
-
-    //private static String initClassAndFunction = "InitFD_Ca_Federico.initBouton";
     
-    //private static String initClassAndFunction = "InitFD_Ca_Sandrine.initGiant";
-    //private static String initClassAndFunction = "InitFD_Ca_Sandrine.initBouton";
-    
-    //private static String initClassAndFunction = "InitMC_Frap_Jason.initMonteCarloFrap";
-    //private static String initClassAndFunction = "InitMC_Frap_Jason.initFiniteDifferenceFrap";
-
-    //private static String initClassAndFunction = "InitMC_AZ_Jason.initMonteCarloAZ";
-    //private static String initClassAndFunction = "InitMC_AZEM_Jason.initMonteCarloAZ";
-
-    //private static String initClassAndFunction = "InitFD_GlutamateUncaging.initLargeSpot";
-    //private static String initClassAndFunction = "InitFD_GlutamateUncaging.initGlomerulus";
+    private static String initClassAndFunction = "InitMC_Projection_Demo.initPrompt";
 
     private Master(){
         // cannot be instantiated
@@ -125,6 +113,8 @@ public final class Master {
             project.initProject = new InitFD_Demo(project);
         } else if (initClass.equalsIgnoreCase("InitMC_Demo")) {
             project.initProject = new InitMC_Demo(project);
+        } else if (initClass.equalsIgnoreCase("InitMC_Projection_Demo")) {
+            project.initProject = new InitMC_Projection_Demo(project);
         } else {
             log("Master.initProject error: failed to find init Class " + initClass);
             return true; // error
@@ -269,7 +259,116 @@ public final class Master {
         }
 
     }
+    
+    ///////////////////////////////////////////////////////////////////
+    //
+    //     Random Numbers
+    //
+    ///////////////////////////////////////////////////////////////////
 
+    public static long initMersenneTwister() {
+        
+        long seed = -1;
+                
+        if ((project != null) && (project.seedMT.length() > 0)) {
+            try {
+                seed = Long.parseLong(project.seedMT);
+            } catch (NumberFormatException e) {
+                Master.exit("bad MT seed: " + project.seedMT);
+                seed = -1;
+            }
+        }
+
+        if (seed < 0) {
+            seed = System.currentTimeMillis();
+            seed += Math.random() * 10000000;
+            project.seedMT = Long.toString(seed);
+        }
+        
+        mt = new MersenneTwisterFast(seed); // init random number generator
+        
+        Master.log("initialized Mersenne Twister random number generator (seed = " + seed + ")");
+
+        return seed;
+
+    }
+    
+    public static double randomGauss() { // mean = 0, stdv = 1
+
+        double v1, v2, w, r;
+
+        if (!Double.isNaN(saveRanGauss)) {
+            r = saveRanGauss;
+            saveRanGauss = Double.NaN;
+            return r;
+        }
+
+        do {
+            v1 = 2.0 * mt.nextDouble() - 1.0; // -1 to +1
+            v2 = 2.0 * mt.nextDouble() - 1.0; // -1 to +1
+            w = v1 * v1 + v2 * v2;
+        } while (w >= 1.0); // 
+
+        w = Math.sqrt((-2.0 * Math.log(w)) / w);
+        
+        saveRanGauss = v2 * w; // save second value
+        
+        return v1 * w;
+
+    }
+    
+    public static double randomChi(double df, double beta) { // df = 50, beta = 10
+        // df - degrees freedom
+        // beta - scale factor
+        double s = 0, r;
+        
+        for (int i = 0; i < df ; i++) {
+            r = randomGauss();
+            s += r * r;
+        }
+        
+        return Math.sqrt(beta) * Math.sqrt(s);
+
+    }
+    
+    // Marsaglia and Tsang method
+    // "A Simple Method for Generating Gamma Variables"
+    // ACM Transactions on Mathematical Software, Vol. 26, No. 3, September 2000, Pages 363–372
+    public static double randomGamma(double alpha) { // alpha ≥ 1 (beta = 1)
+
+        double xnorm, v1, v2, test;
+
+        int trial_limit = 100;
+
+        if (alpha < 1) {
+            return Double.NaN;
+        }
+
+        double d = alpha - 1.0 / 3.0;
+        double c = 1.0 / Math.sqrt(9.0 * d);
+
+        for (int i = 0; i < trial_limit; i += 1) {
+
+            xnorm = randomGauss();
+
+            if (xnorm <= -1.0 / c) {
+                continue;
+            }
+
+            v1 = Math.pow((1 + c * xnorm), 3);
+            v2 = Math.log(mt.nextDouble());
+            test = 0.5 * xnorm * xnorm + d - d * v1 + d * Math.log(v1);
+
+            if (v2 < test) {
+                return v1 * d;
+            }
+
+        }
+
+        return Double.NaN;
+
+    }
+    
     ///////////////////////////////////////////////////////////////////
     //
     //     Log Functions
@@ -577,6 +676,7 @@ public final class Master {
         if (mainframe != null) {
             //mainframe.setTitle("D3D " + project.name);
             mainframe.setTitle(project.name);
+            mainframe.updateMenuProject();
         }
     }
 
@@ -770,12 +870,12 @@ public final class Master {
 
         try {
 
-            bw1 = new BufferedWriter(new FileWriter(fullName));
+            bw = new BufferedWriter(new FileWriter(fullName));
 
-            bw1.write("#D3D Parameter File v" + D3D_VERSION);
-            bw1.newLine();
-            bw1.write("#" + currentDate());
-            bw1.newLine();
+            bw.write("#D3D Parameter File v" + D3D_VERSION);
+            bw.newLine();
+            bw.write("#" + currentDate());
+            bw.newLine();
 
             log("created output parameter file: " + fullName);
 
@@ -790,16 +890,16 @@ public final class Master {
 
     public static boolean writeParamVectorClose() {
 
-        if (bw1 == null) {
+        if (bw == null) {
             return false;
         }
 
         try {
-            bw1.close();
-            bw1 = null;
+            bw.close();
+            bw = null;
             return true;
         } catch (IOException e) {
-            log("unable to close file: " + bw1.toString());
+            log("unable to close file: " + bw.toString());
             return false;
         }
 
@@ -809,7 +909,7 @@ public final class Master {
 
         ParamVector pv;
 
-        if (bw1 == null) {
+        if (bw == null) {
             return false;
         }
 
@@ -831,7 +931,7 @@ public final class Master {
         String oname;
         String otype;
 
-        if (bw1 == null) {
+        if (bw == null) {
             return false;
         }
 
@@ -851,24 +951,24 @@ public final class Master {
                 otype = o.getType();
 
                 if (otype.compareToIgnoreCase("Class") == 0) {
-                    bw1.newLine();
-                    bw1.write(otype + "=" + o.getValue());
+                    bw.newLine();
+                    bw.write(otype + "=" + o.getValue());
                 } else if (oname.length() > 0) {
-                    bw1.write(oname + "=" + o.getValue());
+                    bw.write(oname + "=" + o.getValue());
                 } else {
                     continue;
                 }
 
-                bw1.newLine();
+                bw.newLine();
 
             }
 
-            bw1.newLine();
-            bw1.write("***************************************");
-            bw1.newLine();
+            bw.newLine();
+            bw.write("***************************************");
+            bw.newLine();
 
         } catch (IOException e) {
-            log("unable to write to file: " + bw1.toString());
+            log("unable to write to file: " + bw.toString());
             return false;
         }
 
@@ -893,13 +993,13 @@ public final class Master {
 
         try {
 
-            bw1 = new BufferedWriter(new FileWriter(fullName1));
+            bw = new BufferedWriter(new FileWriter(fullName1));
 
-            bw1.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-            bw1.newLine();
-            bw1.write("<?xml-stylesheet type=\"text/xsl\" href=\"" + fileName + ".xsl\"?>");
-            bw1.newLine();
-            bw1.write("<D3D version=\"" + D3D_VERSION + "\">");
+            bw.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            bw.newLine();
+            bw.write("<?xml-stylesheet type=\"text/xsl\" href=\"" + fileName + ".xsl\"?>");
+            bw.newLine();
+            bw.write("<D3D version=\"" + D3D_VERSION + "\">");
 
             log("created output parameter file: " + fullName1);
 
@@ -939,19 +1039,19 @@ public final class Master {
 
     public static boolean writeParamVectorXMLclose() {
 
-        if ((bw1 == null) || (bw2 == null)){
-            bw1 = null;
+        if ((bw == null) || (bw2 == null)){
+            bw = null;
             bw2 = null;
             return false;
         }
 
         try {
-            bw1.newLine();
-            bw1.write("</D3D>");
-            bw1.close();
-            bw1 = null;
+            bw.newLine();
+            bw.write("</D3D>");
+            bw.close();
+            bw = null;
         } catch (IOException e) {
-            log("unable to close file: " + bw1.toString());
+            log("unable to close file: " + bw.toString());
             return false;
         }
 
@@ -981,7 +1081,7 @@ public final class Master {
 
         ParamVector pv;
 
-        if ((bw1 == null) || (bw2 == null)){
+        if ((bw == null) || (bw2 == null)){
             return false;
         }
 
@@ -1012,7 +1112,7 @@ public final class Master {
 
         classes[0]="D3D";
 
-        if ((bw1 == null) || (bw2 == null)){
+        if ((bw == null) || (bw2 == null)){
             return false;
         }
 
@@ -1060,27 +1160,27 @@ public final class Master {
 
                     classTRcolor = "<tr bgcolor=\"#cccc99\">";
 
-                    bw1.newLine();
+                    bw.newLine();
 
                     for (int j = 0; j < classCounter+1; j++) {
-                        bw1.write(classIndent);
+                        bw.write(classIndent);
                     }
 
-                    bw1.write("<" + o.getValue() + ">"); // open new class
+                    bw.write("<" + o.getValue() + ">"); // open new class
                     classCounter += 1;
 
                     classes[classCounter]=o.getValue();
 
                 } else if (otype.compareToIgnoreCase("EndClass") == 0) {
 
-                    bw1.newLine();
+                    bw.newLine();
                     classCounter -= 1;
 
                     for (int j = 0; j < classCounter+1; j++) {
-                        bw1.write(classIndent);
+                        bw.write(classIndent);
                     }
 
-                    bw1.write("</" + o.getValue() + ">"); // close class
+                    bw.write("</" + o.getValue() + ">"); // close class
 
                     if (tableOpen){
                         bw2.newLine();
@@ -1119,15 +1219,15 @@ public final class Master {
                     bw2.newLine();
                     bw2.write("</tr>");
 
-                    bw1.newLine();
+                    bw.newLine();
 
                     for (int j = 0; j < classCounter+1; j++) {
-                        bw1.write(classIndent);
+                        bw.write(classIndent);
                     }
 
                     //bw1.write("<" + oname + " units=\"" + o.getUnits() + "\">" + o.getValue() + "</" + oname + ">");
 
-                    bw1.write("<" + oname + " value=\"" + o.getValue() + "\" units=\"" + o.getUnits() + "\" />");
+                    bw.write("<" + oname + " value=\"" + o.getValue() + "\" units=\"" + o.getUnits() + "\" />");
 
                 }
 
@@ -1365,6 +1465,53 @@ public final class Master {
         updatePanel2D();
         return dd;
     }
+    
+    public static int[] addDiffusantCalmodulinFaas(double CTOTAL, int iCalcium) {
+        // "Calmodulin as a direct detector of Ca2+ signals"
+        // Faas GC, Raghavachari S, Lisman JE, Mody I
+        // Nat Neurosci. 2011 Mar;14(3):301-4. doi: 10.1038/nn.2746. Epub 2011 Jan 23
+        // temperature = 35C
+        double D = 0.05; // um^2/ms
+        double cTotal = CTOTAL / 2.0; // mM // half for each lobe
+        int id[] = new int[4]; // 4 diffusants
+        DiffusantCalmodulinCaFaas dNL, dCL;
+        
+        id[0] = Master.addDiffusant("CM_NL_CaTR", 0, D);
+        dNL = new DiffusantCalmodulinCaFaas(project, "CM_NL_CaRCaR", cTotal, D, null, iCalcium, id[0], "NL");
+        id[1] = project.addDiffusant(dNL);
+        
+        id[2] = Master.addDiffusant("CM_CL_CaTR", 0, D);
+        dCL = new DiffusantCalmodulinCaFaas(project, "CM_CL_CaRCaR", cTotal, D, null, iCalcium, id[2], "CL");
+        id[3] = project.addDiffusant(dCL);
+        
+        return id;
+    }
+    
+    public static int[] addDiffusantCalretininFaas(double cTotal, int iCalcium) {
+        // "Resolving the Fast Kinetics of Cooperative Binding: Ca2+ Buffering by Calretinin"
+        // PLoS Biol. 2007 Nov;5(11):e311.
+        // Faas GC, Schwaller B, Vergara JL, Mody I.
+        // Room Temperature ~25C
+        // Faas et al use Ctotal = 0.1 mM
+        double cTotal_ind = cTotal; // 1 independent Ca binding site
+        double cTotal_coop = cTotal * 2; // 2 cooperative Ca binding sites
+        double CaTR_C0 = 0; // computed by DiffusantCalretininCaFaas
+        int id[] = new int[3]; // 3 diffusants
+        
+        double D = 0.02; // um^2/ms
+        double Kon = 7.3; // independent CR Kon (1/(mM*ms))
+        double Koff = 0.252; // independent CR Koff (1/ms)
+
+        id[0] = Master.addDiffusantReactant("CaCR_ind", cTotal_ind, D, iCalcium, Kon, Koff); // independent
+        id[1] = Master.addDiffusant("CR_CaTR", CaTR_C0, D); // cooperative, 1st reactant
+        DiffusantCalretininCaFaas d = new DiffusantCalretininCaFaas(project, "CR_CaRCaR", cTotal_coop, D, null, iCalcium, id[1]); // cooperative, 2nd reactant
+        id[2] = project.addDiffusant(d);
+            
+        updatePanel2D();
+        
+        return id;
+        
+    }
 
     public static Diffusant addDiffusantPrompt() {
 
@@ -1404,31 +1551,25 @@ public final class Master {
         int diffusantNum = 0;
         double onset = 1;
         double duration = 1;
-        double ctotal = 1; // mM
+        double q = 1; // mM/ms
         
-        PulseTimer pt = new PulseTimer(project, onset, duration, ctotal);
+        PulseTimer pt = new PulseTimer(project, onset, duration, q, "mM/ms");
 
-        return addSource(diffusantNum, project.geometry, pt);
+        return addSource(diffusantNum, project.geometry, pt, "Q");
 
     }
     
-    public static Source addSource(int DiffusantNum, CoordinatesVoxels c, double onset, double duration, double ctotal) {
-        PulseTimer pt = new PulseTimer(project, onset, duration, ctotal);
-        return addSource(sourceName(), DiffusantNum, c, pt);
+    public static Source addSource(int DiffusantNum, CoordinatesVoxels c, double onset, double duration, double valueQCNK, String selectQCNK) {
+        PulseTimer pt = new PulseTimer(project, onset, duration, valueQCNK, Source.typeUnits(selectQCNK));
+        return addSource(sourceName(), DiffusantNum, c, pt, selectQCNK);
     }
     
-    public static Source addSourceNtotal(int DiffusantNum, CoordinatesVoxels c, double onset, double duration, double ntotal) {
-        double ctotal = Utility.N2C(ntotal, project.dx, c.spaceVoxels);
-        PulseTimer pt = new PulseTimer(project, onset, duration, ctotal);
-        return addSource(sourceName(), DiffusantNum, c, pt);
+    public static Source addSource(int DiffusantNum, CoordinatesVoxels c, PulseTimer pt, String selectQCNK) {
+        return addSource(sourceName(), DiffusantNum, c, pt, selectQCNK);
     }
     
-    public static Source addSource(int DiffusantNum, CoordinatesVoxels c, PulseTimer pt) {
-        return addSource(sourceName(), DiffusantNum, c, pt);
-    }
-    
-    public static Source addSource(String name, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt) {
-        Source s = new Source(project, name, DiffusantNum, c, pt);
+    public static Source addSource(String name, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt, String selectQCNK) {
+        Source s = new Source(project, name, DiffusantNum, c, pt, selectQCNK);
         project.addSource(s);
         updatePanel2D();
         return s;
@@ -1439,7 +1580,7 @@ public final class Master {
     }
     
     public static Source addSourceClamp(String name, int DiffusantNum, CoordinatesVoxels c, double clampValue) {
-        Source s = new Source(project, name, DiffusantNum, c, clampValue);
+        Source s = new Source(project, name, DiffusantNum, c, clampValue, "Cclamp");
         project.addSource(s);
         updatePanel2D();
         return s;
@@ -1458,7 +1599,7 @@ public final class Master {
     
     public static SourceGauss addSourceGauss(int DiffusantNum, CoordinatesVoxels c,
             double tpeak, double stdv, double cTotal) {
-        PulseTimer pt = new PulseTimer(project, tpeak, stdv, cTotal);
+        PulseTimer pt = new PulseTimer(project, tpeak, stdv, cTotal, "mM");
         return addSourceGauss(sourceName(), DiffusantNum, c, pt);
     }
     
@@ -1488,7 +1629,7 @@ public final class Master {
     
     public static SourceGamma addSourceGamma(int DiffusantNum, CoordinatesVoxels c,
             double onset, double tau, double cTotal) {
-        PulseTimer pt = new PulseTimer(project, onset, tau, cTotal);
+        PulseTimer pt = new PulseTimer(project, onset, tau, cTotal, "mM");
         return addSourceGamma(sourceName(), DiffusantNum, c, pt);
     }
     
@@ -1524,17 +1665,17 @@ public final class Master {
         return s;
     }
     
-    public static Source addSourceImpulse(int DiffusantNum, CoordinatesVoxels c, double t, double ctotal) {
-        PulseTimer pt = new PulseTimer(project, t, 0, ctotal);
-        return addSource(sourceName(), DiffusantNum, c, pt);
+    public static Source addSourceImpulse(int DiffusantNum, CoordinatesVoxels c, double t, double value, String selectQCNK) {
+        PulseTimer pt = new PulseTimer(project, t, 0, value, Source.typeUnits(selectQCNK));
+        return addSource(sourceName(), DiffusantNum, c, pt, selectQCNK);
     }
 
-    public static void addSourceImpulseRandom(int DiffusantNum, int num, int Ntotal) {
+    public static void addSourceImpulseRandom(int DiffusantNum, int num, double value, String selectQCNK) {
 
         int i, j, k, im, jm, km;
         double t;
-        int numVoxels = 1;
-        double ctotal = Utility.N2C(Ntotal, project.dx, numVoxels);
+        //int numVoxels = 1;
+        //double ctotal = Utility.N2C(Ntotal, project.dx, numVoxels);
 
         CoordinatesVoxels coordinates = new CoordinatesVoxels(project);
 
@@ -1553,7 +1694,7 @@ public final class Master {
             if ((i > 0) && (j > 0) && (k > 0)) {
                 if ((i < im - 1) && (j < jm - 1) && (k < km - 1)) {
                     coordinates.setVoxelPoint(i, j, k);
-                    addSourceImpulse(DiffusantNum, coordinates, t, ctotal);
+                    addSourceImpulse(DiffusantNum, coordinates, t, value, selectQCNK);
                 }
             }
         }
@@ -2033,9 +2174,28 @@ public final class Master {
         return false;
 
     }
+    
+    public static String promptForInput(String[] promptList, String promptStr, String promptTitle, String promptSelect) {
+
+        String[] possibilities = promptList;
+
+        ImageIcon icon = null;
+
+        String s = (String) JOptionPane.showInputDialog(
+                mainframe,
+                promptStr,
+                promptTitle,
+                JOptionPane.PLAIN_MESSAGE,
+                icon,
+                possibilities,
+                promptSelect);
+
+        return s;
+        
+    }
 
     // get file name
-    public static String getFileName(String pathname) {
+    public static String getDirectory(String pathname) {
         
         String pstr;
         
@@ -2059,6 +2219,9 @@ public final class Master {
             pstr = fc.getCurrentDirectory() + "\\" + fc.getSelectedFile().getName();
             //pstr = pstr.substring(2);
             pstr = pstr.replace('\\', '/');
+            if (!pstr.endsWith("/")) {
+                pstr += "/";
+            }
             return pstr;
         }
         

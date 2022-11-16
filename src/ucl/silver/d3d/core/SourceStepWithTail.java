@@ -6,12 +6,12 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class SourceStepWithTail extends Source {
 
@@ -26,7 +26,7 @@ public class SourceStepWithTail extends Source {
     private double tStepOff;
 
     public SourceStepWithTail(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt) {
-        super(p, NAME, DiffusantNum, c, pt);
+        super(p, NAME, DiffusantNum, c, pt, "C");
         createVector(true); // sets ParamVector
     }
 
@@ -87,7 +87,7 @@ public class SourceStepWithTail extends Source {
 
         int indexNum, numVoxels;
         double scale, a1, a2, cValue, avgC = 0;
-        boolean timerHigh = false;
+        boolean timerHigh;
 
         if (spaceVoxels == 0) {
             return 0;
@@ -96,11 +96,11 @@ public class SourceStepWithTail extends Source {
         if ((fd.diffus == null) || (fd.it >= fd.itmax)) {
             return 0;
         }
-
-        if ((pulseTimer == null) || (pulseTimer.timer == null)) {
+        
+        if (pulseTimer != null) {
+            timerHigh = pulseTimer.high(fd.it) > 0;
+        } else {
             timerHigh = true; // on for all time
-        } else if (pulseTimer.timer[fd.it] > 0) {
-            timerHigh = true;
         }
 
         if (timerHigh) {
