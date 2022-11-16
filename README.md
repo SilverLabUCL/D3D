@@ -20,7 +20,7 @@ For more information contact j.rothman@ucl.ac.uk
 
 7. Demo initialisation classes that include several simulation examples (D3D > Project > Init).
 
-8. Functions for creating 2D projections of spherical particles for Monte Carlo simulations, including demo functions for recreating the 2D projections used in the manuscript 'Validation of a stereological method for estimating particle size and density from 2D projections with high accuracy' https://doi.org/10.1101/2022.10.21.513285 (D3D > Project > Init > InitMC_Projection_Demo).
+8. Functions for creating 2D projections of spherical particles for Monte Carlo simulations, including demo functions for recreating the 2D projections used in the preprint 'Validation of a stereological method for estimating particle size and density from 2D projections with high accuracy' https://doi.org/10.1101/2022.10.21.513285 (D3D > Project > Init > InitMC_Projection_Demo).
 
 # Published D3D Studies Include:
 1. Glutamate release in the synaptic cleft between cerebellar mossy fiber terminals (MFTs) and granule cell (GC) dendrites (Nielsen et al., 2004).
@@ -32,6 +32,8 @@ For more information contact j.rothman@ucl.ac.uk
 4. Brownian motion of synaptic vesicles in cerebellar MFTs, including steric interactions (Rothman et al., 2016).
 
 5. Synaptic vesicle dynamics near active zones, including connectors, tethers, docking and release (Rothman et al., 2016).
+
+6. 2D projections of spherical particles in planar and thick sections (unpublished preprint Rothman et al., 2022).
 
 # References
 B Cichocki, K Hinsen (1990) Dynamic computer simulation of concentrated hard sphere suspensions: I. Simulation technique and mean square displacement data. Physica A 166:473–491. https://doi.org/10.1016/0378-4371(90)90068-4
