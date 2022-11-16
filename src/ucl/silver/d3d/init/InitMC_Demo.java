@@ -9,20 +9,21 @@ import ucl.silver.d3d.utils.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class InitMC_Demo extends InitProject {
     
-    private final String directory = "/Jason/D3D/Simulations/";
+    //private final String directory = "/Jason/D3D/Simulations/";
     //private final String directory = "/Users/jason/Documents/D3D/Simulations/"
-    private final String folder = "Testing";
+    //private final String folder = "Testing";
     
-    public double vesicle_radius = 0.025; // um
+    public double vesicle_radius_mean = 0.025; // um
+    public double vesicle_radius_stdv = 0; // um
     public double Dshort = 0.060e-3; // um^2/ms // vesicle short-time diffusion constant
     
     public boolean FRAP_on = false;
@@ -104,10 +105,9 @@ public class InitMC_Demo extends InitProject {
         double lambda = 0.025;
         //double lambda = 0.018;
         
-        project.dx = 2 * vesicle_radius;
+        project.dx = 2 * vesicle_radius_mean;
         project.set("printDT", 1);
         project.set("saveDT", 0.005);
-        project.stability = 0.005;
         
         double cubeWidth = 1;
         
@@ -117,7 +117,7 @@ public class InitMC_Demo extends InitProject {
         //double vesicleVolumeFraction = 0.40; // Figure 1
         Dshort = 0.001; // um^2/ms
 
-        DiffusantVesicles dv = new DiffusantVesicles(project, "Vesicles", 0, Dshort, null, vesicle_radius);
+        DiffusantParticles dv = new DiffusantParticles(project, "Vesicles", 0, Dshort, null, vesicle_radius_mean, vesicle_radius_stdv);
 
         dv.setVolumeFraction = vesicleVolumeFraction;
         dv.setImmobilePercent = 0;
@@ -126,18 +126,18 @@ public class InitMC_Demo extends InitProject {
         
         int dnum = project.addDiffusant(dv);
         
-        double vesicleStep = lambda * vesicle_radius;
+        double vesicleStep = lambda * vesicle_radius_mean;
 
         System.out.println("vesicle step = " + vesicleStep + " um");
 
-        double t0 = vesicle_radius * vesicle_radius / ( 6 * Dshort);
+        double t0 = vesicle_radius_mean * vesicle_radius_mean / ( 6 * Dshort);
 
         System.out.println("t0 = " + t0 + " ms");
 
         project.simTime = 16 * t0; // Figure 1
         project.simTime *= 10; // longer to reach steady-state
         
-        mc.minVesicleStep = vesicleStep;
+        mc.minParticleStep = vesicleStep;
         mc.freeDiffusion = false;
         mc.PBC = true; // use periodic boundary conditions
         
@@ -161,10 +161,9 @@ public class InitMC_Demo extends InitProject {
         
         FRAP_onset = 2;
         project.simTime = FRAP_onset + 60;
-        project.dx = 2 * vesicle_radius;
+        project.dx = 2 * vesicle_radius_mean;
         project.set("printDT", 5);
         project.set("saveDT", 0.05);
-        project.stability = 0.005;
   
         //double cubeWidth = 2.0;
         double cubeWidthxy = 1.1;
@@ -185,15 +184,14 @@ public class InitMC_Demo extends InitProject {
         
         int iPSF_index = geometry.addPSF(iPSF);
 
-        timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, 1.0);
+        timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, FRAP_kPhoto, "1/ms");
 
-        DiffusantVesiclesPhoto vs = new DiffusantVesiclesPhoto(project, "Vesicles", 0, Dshort, null, vesicle_radius, timer, iPSF);
+        DiffusantParticlesPhoto vs = new DiffusantParticlesPhoto(project, "Vesicles", 0, Dshort, null, vesicle_radius_mean, vesicle_radius_stdv, timer, iPSF);
 
         int dnum = project.addDiffusant(vs);
         
         vs.setVolumeFraction = 0.26; // Zoltan
         vs.setImmobilePercent = 0; //0.25
-        vs.kPhoto = FRAP_kPhoto;
         vs.colorReady.setColor("[r=102,g=255,b=0]");
         vs.colorReady.setGradientColor("[r=255,g=0,b=0]");
         
@@ -214,7 +212,7 @@ public class InitMC_Demo extends InitProject {
         
         int dPSF_index = geometry.addPSF(dPSF);
         
-        mc.minVesicleStep = 0.002;
+        mc.minParticleStep = 0.002;
 
         mc.frapOn = true;
         mc.saveFluorescence = false;
@@ -245,12 +243,11 @@ public class InitMC_Demo extends InitProject {
         FRAP_onset = baselinetime + 70; // first pulse is 70 ms before bleaching pulse
         project.simTime = 10000 + FRAP_onset;
         project.dx = 0.05;
-        project.stability = 0.005;
         project.set("printDT", 200);
         project.set("saveDT", 0.05);
         
         double vesicle_width = 0.049; // um //  measured in MFT
-        vesicle_radius = vesicle_width / 2.0;
+        vesicle_radius_mean = vesicle_width / 2.0;
         
         double cubeWidth = 3.0;
 
@@ -275,7 +272,7 @@ public class InitMC_Demo extends InitProject {
         int iPSF_index;
         double sdxy, sdz;
         
-        DiffusantVesiclesPhoto vs;
+        DiffusantParticlesPhoto vs;
         
         switch (iPSFselect) {
             
@@ -294,7 +291,7 @@ public class InitMC_Demo extends InitProject {
 
                 iPSF_index = geometry.addPSF(gPSF);
                 
-                vs = new DiffusantVesiclesPhoto(project, "Vesicles", 0, Dshort, null, vesicle_radius, timer, gPSF);
+                vs = new DiffusantParticlesPhoto(project, "Vesicles", 0, Dshort, null, vesicle_radius_mean, vesicle_radius_stdv, timer, gPSF);
 
                 break;
 
@@ -311,7 +308,7 @@ public class InitMC_Demo extends InitProject {
 
                 iPSF_index = geometry.addPSF(tPSF);
                 
-                vs = new DiffusantVesiclesPhoto(project, "Vesicles", 0, Dshort, null, vesicle_radius, timer, tPSF);
+                vs = new DiffusantParticlesPhoto(project, "Vesicles", 0, Dshort, null, vesicle_radius_mean, vesicle_radius_stdv, timer, tPSF);
                 
                 break;
                 
@@ -325,7 +322,7 @@ public class InitMC_Demo extends InitProject {
         vs.color.setGradientColor("[r=255,g=255,b=255]");
         vs.setVolumeFraction = 0.17; // measured in MFT
         vs.setImmobilePercent = 0.25; // estimated in MFT
-        vs.kPhoto = FRAP_kPhoto;
+        //vs.kPhoto = FRAP_kPhoto;
 
         int dnum = project.addDiffusant(vs);
         
@@ -350,7 +347,7 @@ public class InitMC_Demo extends InitProject {
 
         //mc.minVesicleStep = 0.001;
         //mc.minVesicleStep = 0.002;
-        mc.minVesicleStep = 0.005;
+        mc.minParticleStep = 0.005;
 
         mc.frapOn = true;
         mc.saveFluorescence = true;
@@ -364,42 +361,45 @@ public class InitMC_Demo extends InitProject {
     }
     
     public void initPulseTimer() {
+        
+        double probe = FRAP_kPhoto * FRAP_smallprobe_amp_ratio;
+        double bleach = FRAP_kPhoto;
 
         if (!FRAP_on) {
             return;
         }
 
         if (FRAP_bleach_on) {
-            timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, 1.0);
+            timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, bleach, "1/ms");
         } else {
-            timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, 0);
+            timer = new PulseTimer(project, FRAP_onset, FRAP_bleach_length, 0, "1/ms");
         }
 
         if (FRAP_smallprobe_on) {
-            timer.add(FRAP_onset - 70, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset - 40, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset - 10, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 20, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 50, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 80, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 110, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 150, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 200, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 260, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 310, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 390, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 490, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 810, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 1110, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 1710, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 2710, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 3910, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 4880, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 5910, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 6910, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 7910, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 8910, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
-            timer.add(FRAP_onset + 9880, FRAP_smallprobe_length, FRAP_smallprobe_amp_ratio);
+            timer.add(FRAP_onset - 70, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset - 40, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset - 10, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 20, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 50, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 80, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 110, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 150, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 200, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 260, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 310, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 390, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 490, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 810, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 1110, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 1710, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 2710, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 3910, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 4880, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 5910, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 6910, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 7910, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 8910, FRAP_smallprobe_length, probe);
+            timer.add(FRAP_onset + 9880, FRAP_smallprobe_length, probe);
         }
 
     }
@@ -421,9 +421,9 @@ public class InitMC_Demo extends InitProject {
         
         geometry.resizeWithSpace(cubeWidth, cubeWidth, cubeWidth);
         
-        vesicle_radius = 0.049/2;
+        vesicle_radius_mean = 0.049/2;
 
-        DiffusantVesiclesAZ vs = new DiffusantVesiclesAZ(project, "Vesicles", 0, Dshort, null, vesicle_radius);
+        DiffusantVesiclesAZ vs = new DiffusantVesiclesAZ(project, "Vesicles", 0, Dshort, null, vesicle_radius_mean, vesicle_radius_stdv);
 
         project.addDiffusant(vs);
 
@@ -435,7 +435,7 @@ public class InitMC_Demo extends InitProject {
         vs.colorReserve.setColor("[r=102,g=102,b=255]");
 
         //mc.minVesicleStep = 0.0020;
-        mc.minVesicleStep = 0.0050;
+        mc.minParticleStep = 0.0050;
 
         //mc.releaseProb = 1.0;
         //mc.releaseRate = 0.1; // kHz

@@ -8,14 +8,14 @@ import java.awt.Color;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
-public class DiffusantVesiclesAZ extends DiffusantVesicles {
+public class DiffusantVesiclesAZ extends DiffusantParticles {
 
     public double meanDockRefractoryPeriod; // ms
 
@@ -44,28 +44,28 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
     }
 
     public DiffusantVesiclesAZ(Project p, String NAME, double InitialConcentration, double DiffusionConstant, CoordinatesVoxels c,
-            double radius) {
+            double radius_mean, double radius_stdv) {
 
-        super(p, NAME, InitialConcentration, DiffusionConstant, c, radius);
+        super(p, NAME, InitialConcentration, DiffusionConstant, c, radius_mean, radius_stdv);
 
         createVector(true);
 
     }
 
     @Override
-    public void vesicleStats() {
+    public void particleStats() {
 
         double count = 0.0;
 
         DiffusantVesicleAZ vaz;
 
-        if (vesicles == null) {
+        if (particles == null) {
             return;
         }
 
-        super.vesicleStats();
+        super.particleStats();
 
-        if (numVesicles <= 0) {
+        if (numParticles <= 0) {
             return;
         }
 
@@ -74,7 +74,7 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
         dockedVesicles = 0;
         reserveVesicles = 0;
 
-        for (DiffusantVesicle v : vesicles) {
+        for (DiffusantParticle v : particles) {
 
             if (v == null) {
                 continue;
@@ -113,7 +113,7 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
     }
 
     @Override
-    public void initVesicles() {
+    public void initParticles() {
 
         RunMonteCarloAZ monteCarlo = ( RunMonteCarloAZ) project.monteCarlo;
 
@@ -122,31 +122,31 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
         if (setNumVesiclesReady > 0) {
             numVesiclesReady = setNumVesiclesReady;
         } else if ((setVolumeFraction > 0) && (spaceVolume > 0)) {
-            numVesiclesReady = numVesiclesPossible(spaceVolume, setMeanRadius, setVolumeFraction);
+            numVesiclesReady = numParticlesPossible(spaceVolume, setRadiusMean, setVolumeFraction);
         } else if ((setDensity > 0) && (spaceVolume > 0)) {
             numVesiclesReady = (int) (setDensity * spaceVolume);
         }
 
-        numVesicles = numVesiclesReady + reserveVesiclesInit;
+        numParticles = numVesiclesReady + reserveVesiclesInit;
 
-        if (numVesicles <= 0) {
-            error("bad number of vesicles: " + numVesicles);
+        if (numParticles <= 0) {
+            error("bad number of vesicles: " + numParticles);
             return;
         }
 
-        vesicles = new DiffusantVesicleAZ[numVesicles];
+        particles = new DiffusantVesicleAZ[numParticles];
 
         for (int i = 0; i < reserveVesiclesInit; i++) {
-            vesicles[i] = new DiffusantVesicleAZ(project, "reserve", setMeanRadius, D, Double.NaN, Double.NaN, Double.NaN);
+            particles[i] = new DiffusantVesicleAZ(project, "reserve", setRadiusMean, D, Double.NaN, Double.NaN, Double.NaN);
         }
 
-        if ((xyz != null) && (xyz.length == numVesicles)) {
-            for (int i = reserveVesiclesInit; i < vesicles.length; i++) {
-                vesicles[i] = new DiffusantVesicleAZ(project, "ready", setMeanRadius, D, xyz[i][0], xyz[i][1], xyz[i][2]);
+        if ((xyz != null) && (xyz.length == numParticles)) {
+            for (int i = reserveVesiclesInit; i < particles.length; i++) {
+                particles[i] = new DiffusantVesicleAZ(project, "ready", setRadiusMean, D, xyz[i][0], xyz[i][1], xyz[i][2]);
             }
         } else {
-            for (int i = reserveVesiclesInit; i < vesicles.length; i++) {
-                vesicles[i] = new DiffusantVesicleAZ(project, "ready", setMeanRadius, D, Double.NaN, Double.NaN, Double.NaN);
+            for (int i = reserveVesiclesInit; i < particles.length; i++) {
+                particles[i] = new DiffusantVesicleAZ(project, "ready", setRadiusMean, D, Double.NaN, Double.NaN, Double.NaN);
             }
         }
 
@@ -214,17 +214,17 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
     }
 
     @Override
-    public boolean setVesicles(String varName, double value) {
+    public boolean setParticles(String varName, double value) {
 
         boolean ok, atLeastOne = false;
 
         DiffusantVesicleAZ vaz;
 
-        if (vesicles == null) {
+        if (particles == null) {
             return false;
         }
 
-        for (DiffusantVesicle v : vesicles) {
+        for (DiffusantParticle v : particles) {
 
             if ((v != null) && (v instanceof DiffusantVesicleAZ)) {
 
@@ -239,7 +239,7 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
             }
         }
 
-        vesicleStats();
+        particleStats();
 
         return atLeastOne;
 
@@ -252,7 +252,7 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
 
         DiffusantVesicleAZ vaz;
 
-        for (DiffusantVesicle v : vesicles) {
+        for (DiffusantParticle v : particles) {
 
             if ((v != null) && (v instanceof DiffusantVesicleAZ)) {
 
@@ -291,7 +291,7 @@ public class DiffusantVesiclesAZ extends DiffusantVesicles {
             if (v < 0) {
                 return false;
             }
-            return setVesicles("dockRefractoryPeriod",v);
+            return setParticles("dockRefractoryPeriod",v);
         }
         if (n.equalsIgnoreCase("setNumVesiclesReady")) {
             if (v < 0) {

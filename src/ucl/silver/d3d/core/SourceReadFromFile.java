@@ -15,12 +15,12 @@ import ucl.silver.d3d.utils.Utility;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class SourceReadFromFile extends Source {
     
@@ -58,7 +58,7 @@ public class SourceReadFromFile extends Source {
     
     public SourceReadFromFile(Project p, String NAME, int DiffusantNum, CoordinatesVoxels c, PulseTimer pt, String file) {
 
-        super(p, NAME, DiffusantNum, c, pt);
+        super(p, NAME, DiffusantNum, c, pt, "C");
 
         if (NAME.length() > 0) {
             name = NAME;
@@ -100,7 +100,6 @@ public class SourceReadFromFile extends Source {
 
         charge = project.diffusants[diffusantNum].charge;
         litersPerVoxel = Utility.litersPerVoxel(project.dx);
-        //C2I_conversionFactor = 1e12 * charge * Utility.FARADAY * litersPerVoxel / project.dt; // convert mM to pA
 
         // compute factor for converting pA/totalVoxels to mM/voxel
         if (charge > 0) {
@@ -114,8 +113,8 @@ public class SourceReadFromFile extends Source {
         Cvoxel_conversionFactor = 1.0e3 * molesPerVoxelPerDT / litersPerVoxel; // mM
 
         // compute factor for converting mM/voxel to pA/voxel
-        molesPerVoxelPerDT = 1 * litersPerVoxel * 1e-3;
-        Qvoxel = molesPerVoxelPerDT / project.dt; // mols/msec
+        //molesPerVoxelPerDT = 1 * litersPerVoxel * 1e-3;
+        //Qvoxel = molesPerVoxelPerDT / project.dt; // mols/msec
 
         //if (charge > 0) {
             //Ivoxel_conversionFactor = Qvoxel * charge * Utility.FARADAY * 1e3 * 1e12; // convert molar flux to pA
@@ -130,7 +129,7 @@ public class SourceReadFromFile extends Source {
 
         int index, numVoxels;
         double cvoxel, avgC = 0;
-        boolean timerHigh = false;
+        boolean timerHigh;
         
         if (!useArray) {
             return 0;
@@ -143,11 +142,11 @@ public class SourceReadFromFile extends Source {
         if ((fd.diffus == null) || (fd.it >= fd.itmax)) {
             return 0;
         }
-
-        if ((pulseTimer == null) || (pulseTimer.timer == null)) {
+        
+        if (pulseTimer != null) {
+            timerHigh = pulseTimer.high(fd.it) > 0;
+        } else {
             timerHigh = true; // on for all time
-        } else if (pulseTimer.timer[fd.it] > 0) {
-            timerHigh = true;
         }
 
         if (useProjectArray) {

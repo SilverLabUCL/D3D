@@ -6,15 +6,16 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class Voxel extends ParamVector {
 
+    public int i, j, k; // voxel array location
     public double x, y, z; // center location in um
     public double PSFi = -1; // illumination PSF
     public double PSFd = -1; // detection PSF
@@ -30,7 +31,7 @@ public class Voxel extends ParamVector {
     public transient Voxel[] neighbors; // 3 x 3 x 3 = 27
     public transient Voxel[] nonSpaceNeighbors; // up to 26
 
-    public DiffusantVesicle firstReady = null;
+    public DiffusantParticle firstParticleInChain = null;
 
     public Voxel(){
         super(null);

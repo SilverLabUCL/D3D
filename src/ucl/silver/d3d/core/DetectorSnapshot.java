@@ -8,12 +8,12 @@ import java.awt.Color;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class DetectorSnapshot extends Detector {
 
@@ -42,6 +42,10 @@ public class DetectorSnapshot extends Detector {
             save.sampleInterval = 0;
             save.saveWhileComputing = true;
             save.updateVectors();
+        }
+        
+        if (pulseTimer == null) {
+            error("init", "pulseTimer", "no pulse timer for snapshots");
         }
 
     }
@@ -73,16 +77,16 @@ public class DetectorSnapshot extends Detector {
     @Override
     public void saveDimensions() {
 
-        if ((save == null) || (!save.autoDimensions)) {
-            return;
-        }
+        if ((save != null) && save.autoDimensions) {
 
-        save.xdim = "ZYX voxels";
+            save.xdim = "ZYX voxels";
 
-        if ((diffusantName == null) || (diffusantName.length() == 0)) {
-            save.ydim = project.concUnits;
-        } else {
-            save.ydim = diffusantName + " (" + project.concUnits + ")";
+            if ((diffusantName == null) || (diffusantName.length() == 0)) {
+                save.ydim = project.concUnits;
+            } else {
+                save.ydim = diffusantName + " (" + project.concUnits + ")";
+            }
+
         }
 
     }
@@ -110,57 +114,53 @@ public class DetectorSnapshot extends Detector {
         if ((fd.diffus == null) || (fd.it >= fd.itmax)) {
             return;
         }
-
-        if ((pulseTimer == null) || (pulseTimer.timer == null)) {
-            return; // requires pulse timer
+        
+        if (pulseTimer.high(fd.it) == 0) {
+            return;
         }
 
-        if (pulseTimer.timer[fd.it] > 0) {
+        if (!setFileName((int) (1000 * fd.time))) {
+            return;
+        }
 
-            if (!setFileName((int) (1000 * fd.time))) {
-                return;
-            }
+        if (!save.init(name, coordinates(), fd.time, dataPoints)) {
+            return;
+        }
 
-            if (!save.init(name, coordinates(), fd.time, dataPoints)) {
-                return;
-            }
+        if (fd.diffus[0].length == 1) {
 
-            if (fd.diffus[0].length == 1) {
+            save.saveData(fd.diffus[diffusantNum][0]); // single compartment
 
-                save.saveData(fd.diffus[diffusantNum][0]); // single compartment
+        } else {
 
-            } else {
+            xVoxel1 = coordinates().xVoxel1;
+            yVoxel1 = coordinates().yVoxel1;
+            zVoxel1 = coordinates().zVoxel1;
+            xVoxel2 = coordinates().xVoxel2;
+            yVoxel2 = coordinates().yVoxel2;
+            zVoxel2 = coordinates().zVoxel2;
 
-                xVoxel1 = coordinates().xVoxel1;
-                yVoxel1 = coordinates().yVoxel1;
-                zVoxel1 = coordinates().zVoxel1;
-                xVoxel2 = coordinates().xVoxel2;
-                yVoxel2 = coordinates().yVoxel2;
-                zVoxel2 = coordinates().zVoxel2;
+            for (int k = zVoxel1; k <= zVoxel2; k++) {
+                for (int j = yVoxel1; j <= yVoxel2; j++) {
+                    for (int i = xVoxel1; i <= xVoxel2; i++) {
 
-                for (int k = zVoxel1; k <= zVoxel2; k++) {
-                    for (int j = yVoxel1; j <= yVoxel2; j++) {
-                        for (int i = xVoxel1; i <= xVoxel2; i++) {
-
-                            if (geometry.isSpace(i, j, k)) {
-                                a = fd.diffus[diffusantNum][geometry.space[i][j][k]];
-                            } else {
-                                a = -1;
-                            }
-
-                            save.saveData(a);
-
+                        if (geometry.isSpace(i, j, k)) {
+                            a = fd.diffus[diffusantNum][geometry.space[i][j][k]];
+                        } else {
+                            a = -1;
                         }
+
+                        save.saveData(a);
+
                     }
                 }
-
             }
 
-            save.finish(name, coordinates(), fd.time);
-
-            Master.log("Snapshot taken at " + fd.time + " " + project.timeUnits);
-
         }
+
+        save.finish(name, coordinates(), fd.time);
+
+        Master.log("Snapshot taken at " + fd.time + " " + project.timeUnits);
 
     }
 

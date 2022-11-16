@@ -12,14 +12,13 @@ import ucl.silver.d3d.core.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
-
 final public class Grid
     extends JPanel implements MouseListener, MouseMotionListener {
 
@@ -36,7 +35,7 @@ final public class Grid
     
     public int pixelsPerVoxel = 15;
     public int pixelsPerVoxelMin = 5;
-    public int pixelsPerVoxelMax = 50;
+    public int pixelsPerVoxelMax = 80;
 
     public double[][] diffusant = null; // for Preview animation display
 
@@ -48,7 +47,7 @@ final public class Grid
     public boolean voxelGrid = true;
     public boolean frame = true;
     public boolean xyzMarkers = false;
-    public boolean redVesiclesPBC = true;
+    public boolean redParticlesPBC = true;
 
     public boolean coordVoxels = false; // (false) um (true) voxels
     public boolean coordClick = false; // (false) update always (true) update on mouse click
@@ -63,6 +62,9 @@ final public class Grid
     DecimalFormat decimal3 = new DecimalFormat("0.000");
 
     private Panel2D panel2D = null;
+    
+    private double phi_Keiding = 0;
+    //private double phi_Keiding = 40;
 
     // class constructor
     public Grid(int w, int h, Panel2D p2D) {
@@ -379,9 +381,12 @@ final public class Grid
 
     // clear current kVoxel
     public void clearPlane() {
+        
+        int ivoxels = iVoxels();
+        int jvoxels = jVoxels();
 
-        for (int i = 0; i < iVoxels(); i++) {
-            for (int j = 0; j < jVoxels(); j++) {
+        for (int i = 0; i < ivoxels; i++) {
+            for (int j = 0; j < jvoxels; j++) {
                 switch (displayMode) {
                     case 0: // shape space
                         setSpace(i, j, kVoxel, 1);
@@ -405,9 +410,12 @@ final public class Grid
         if (kVoxel == copyPlane) {
             return;
         }
+        
+        int ivoxels = iVoxels();
+        int jvoxels = jVoxels();
 
-        for (int i = 0; i < iVoxels(); i++) {
-            for (int j = 0; j < jVoxels(); j++) {
+        for (int i = 0; i < ivoxels; i++) {
+            for (int j = 0; j < jvoxels; j++) {
                 setSpace(i, j, kVoxel, getSpace(i, j, copyPlane));
             }
         }
@@ -599,18 +607,16 @@ final public class Grid
 
         if (isource < 0) {
 
-            for (int is = 0; is < sources.length; is++) {
-                
-                c = null;
+            for (Source s : sources) {
 
-                if ((sources[is] == null) || (sources[is].color == null)) {
+                if ((s == null) || (s.color == null)) {
                     continue;
                 }
                 
-                if (sources[is].isInside(xVoxel, yVoxel, zVoxel)) {
+                if (s.isInside(xVoxel, yVoxel, zVoxel)) {
 
                     //if (!Master.project.insideAnySource(xVoxel, yVoxel, zVoxel, is)) {
-                        c = sources[is].color.getColor(sources[is].Ctotal, min, max);
+                        c = s.color.getColor(s.Ctotal, min, max);
                     //}
 
                 } else {
@@ -923,7 +929,7 @@ final public class Grid
         Diffusant[] diffusants = Master.project.diffusants;
         Detector[] detectors = Master.project.detectors;
 
-        int d = displayModeArrayNum;
+        int i = displayModeArrayNum;
 
         switch(displayMode) {
 
@@ -936,15 +942,16 @@ final public class Grid
                     return -1;
                 }
 
-                if ((d >= 0) && (d < diffusants.length) && (diffusants[d] != null)) {
-                    if (diffusants[d].psf != null) {
+                if ((i >= 0) && (i < diffusants.length) && (diffusants[i] != null)) {
+                    
+                    if (diffusants[i].psf != null) {
                         switch (xyzSelect) {
                             case 0:
-                                return diffusants[d].psf.xVoxelCenter();
+                                return diffusants[i].psf.xVoxelCenter();
                             case 1:
-                                return diffusants[d].psf.yVoxelCenter();
+                                return diffusants[i].psf.yVoxelCenter();
                             case 2:
-                                return diffusants[d].psf.zVoxelCenter();
+                                return diffusants[i].psf.zVoxelCenter();
                         }
                     }
                 }
@@ -960,15 +967,15 @@ final public class Grid
                     return -1;
                 }
 
-                if ((d >= 0) && (d < detectors.length) && (detectors[d] != null)) {
-                    if (detectors[d].psf != null) {
+                if ((i >= 0) && (i < detectors.length) && (detectors[i] != null)) {
+                    if (detectors[i].psf != null) {
                         switch (xyzSelect) {
                             case 0:
-                                return detectors[d].psf.xVoxelCenter();
+                                return detectors[i].psf.xVoxelCenter();
                             case 1:
-                                return detectors[d].psf.yVoxelCenter();
+                                return detectors[i].psf.yVoxelCenter();
                             case 2:
-                                return detectors[d].psf.zVoxelCenter();
+                                return detectors[i].psf.zVoxelCenter();
                         }
                     }
                 }
@@ -1290,11 +1297,11 @@ final public class Grid
 
         int x0, y0;
         int itemp, jtemp;
-        int ivox = iVoxels();
-        int jvox = jVoxels();
+        int ivoxels = iVoxels();
+        int jvoxels = jVoxels();
         int space;
         
-        double maxC0;
+        double maxC0 = 0;
         
         boolean error;
 
@@ -1304,15 +1311,17 @@ final public class Grid
 
         Source[] sources = Master.project.sources;
         Detector[] detectors = Master.project.detectors;
-
-        maxC0 = Master.project.maxC0();
+        
+        if (Master.project.finiteDifference != null) {
+            maxC0 = Master.project.finiteDifference.maxC0;
+        }
 
         if (maxC0 == 0) {
             maxC0 = 1;
         }
 
-        for (int i = 0; i < ivox; i++) {
-            for (int j = 0; j < jvox; j++) {
+        for (int i = 0; i < ivoxels; i++) {
+            for (int j = 0; j < jvoxels; j++) {
 
                 error = false;
 
@@ -1321,8 +1330,8 @@ final public class Grid
 
                 if (isym) {
 
-                    itemp = Math.abs(i - (ivox - 1)) + ivox;
-                    jtemp = Math.abs(j - (jvox - 1)) + jvox;
+                    itemp = Math.abs(i - (ivoxels - 1)) + ivoxels;
+                    jtemp = Math.abs(j - (jvoxels - 1)) + jvoxels;
 
                     x0 = (int) iVoxel2Pixels(itemp, jtemp);
 
@@ -1330,8 +1339,8 @@ final public class Grid
 
                 if (jsym) {
 
-                    itemp = Math.abs(i - (ivox - 1)) + ivox;
-                    jtemp = Math.abs(j - (jvox - 1)) + jvox;
+                    itemp = Math.abs(i - (ivoxels - 1)) + ivoxels;
+                    jtemp = Math.abs(j - (jvoxels - 1)) + jvoxels;
 
                     y0 = (int) jVoxel2Pixels(itemp, jtemp);
 
@@ -1664,10 +1673,10 @@ final public class Grid
 
     private void paintMonteCarloDiffusants(Graphics g) {
         
-        double diameter, diameterMax = 0;
-        //int ismall = 0, ilarge = 0;
+        double radius, area = 0;
+        int icount = 0;
 
-        DiffusantVesicles vs;
+        DiffusantParticles d;
 
         Color color;
 
@@ -1689,35 +1698,32 @@ final public class Grid
                 continue;
             }
 
-            if (diffusants[i] instanceof DiffusantVesicles) {
+            if (diffusants[i] instanceof DiffusantParticles) {
 
-                vs = (DiffusantVesicles) diffusants[i];
+                d = (DiffusantParticles) diffusants[i];
 
-                if (vs.vesicles == null) {
+                if (d.particles == null) {
                     break;
                 }
 
-                for (DiffusantVesicle dv : vs.vesicles) {
+                for (DiffusantParticle p : d.particles) {
 
-                    if (dv == null) {
+                    if (p == null) {
                         continue;
                     }
 
-                    if (vs instanceof DiffusantVesiclesAZ) {
-                        color = getMonteCarloColor((DiffusantVesiclesAZ) vs, (DiffusantVesicleAZ) dv);
+                    if (d instanceof DiffusantVesiclesAZ) {
+                        color = getMonteCarloAZColor((DiffusantVesiclesAZ) d, (DiffusantVesicleAZ) p);
                     } else {
-                        color = getMonteCarloColor(vs, dv);
+                        color = getMonteCarloColor(d, p);
                     }
 
-                    diameter = paintMonteCarloDiffusantVesicle(g, dv, color, monteCarlo.PBC);
+                    radius = paintMonteCarloDiffusantParticle(g, p, color, monteCarlo.PBC);
                     
-                    //if (diameter > 0) {
-                        //if (diameter > 21) {
-                        //   ilarge++;
-                        //} else {
-                        //    ismall++;
-                       // }
-                        //diameterMax = Math.max(diameterMax, diameter);
+                    //if (radius > 0) {
+                        //Master.log("" + radius);
+                        //area += Math.PI * Math.pow(radius, 2.0);
+                        //icount++;
                     //}
 
                 }
@@ -1725,43 +1731,44 @@ final public class Grid
             }
         }
         
-       //Master.log("vesicles = " + (ilarge) + " (" + ((ilarge + ismall)) + ")");
+       //Master.log("particles = " + (ilarge) + " (" + ((ilarge + ismall)) + ")");
        //Master.log("max diameter = " + diameterMax);
-
+       //Master.log("particles area = " + area + " um^2");
+       //Master.log("" + icount + "\t" + area);
     }
 
-    private Color getMonteCarloColor(DiffusantVesicles vs, DiffusantVesicle v) {
+    private Color getMonteCarloColor(DiffusantParticles d, DiffusantParticle p) {
 
         Color color = Color.YELLOW;
 
-        if (v.insideGeometry) {
+        if (p.insideGeometry) {
             
             if (Master.project.monteCarlo instanceof RunMonteCarloPhoto) {
 
                 RunMonteCarloPhoto mc = (RunMonteCarloPhoto) Master.project.monteCarlo;
 
                 if (mc.frapOn) {
-                    color = vs.colorReady.getColor(v.fluorescence, 0, 1);
+                    color = d.colorReady.getColor(p.fluorescence, 0, 1);
                 } else {
-                    color = vs.colorReady.color;
+                    color = d.colorReady.color;
                 }
 
             } else {
-                color = vs.colorReady.color;
+                color = d.colorReady.color;
             }
 
 
 
-            //if (!preview && !dv.mobile) {
+            //if (!preview && !p.mobile) {
             //    color = dvs.colorImmobile.color;
             //}
 
-            if (v.isConnected()) {
-                color = vs.colorConnected.color;
+            if (p.isConnected()) {
+                color = d.colorConnected.color;
             }
             
-            if (!v.mobile) {
-                color = vs.colorImmobile.color;
+            if (!p.mobile) {
+                color = d.colorImmobile.color;
             }
 
         }
@@ -1770,31 +1777,31 @@ final public class Grid
 
     }
 
-    private Color getMonteCarloColor(DiffusantVesiclesAZ dvs, DiffusantVesicleAZ dv) {
+    private Color getMonteCarloAZColor(DiffusantVesiclesAZ d, DiffusantVesicleAZ v) {
 
         Color color = Color.YELLOW;
 
         RunMonteCarloAZ montecarlo = (RunMonteCarloAZ) Master.project.monteCarlo;
 
-        if (dv.isReady) {
+        if (v.isReady) {
 
-            color = dvs.colorReady.color;
+            color = d.colorReady.color;
 
-            //if (!preview && !dv.mobile) {
-            //    color = dvs.colorImmobile.color;
+            //if (!preview && !p.mobile) {
+            //    color = d.colorImmobile.color;
             //}
 
-            if (!dv.mobile) {
-                color = dvs.colorImmobile.color;
+            if (!v.mobile) {
+                color = d.colorImmobile.color;
             }
 
-            if (dv.isConnected()) {
-                color = dvs.colorConnected.color;
+            if (v.isConnected()) {
+                color = d.colorConnected.color;
             }
 
             if ((montecarlo.azDV != null) && (montecarlo.azDV.connectTo != null)) {
-                for (DiffusantVesicle dv2 : montecarlo.azDV.connectTo) {
-                    if (dv == dv2) {
+                for (DiffusantParticle v2 : montecarlo.azDV.connectTo) {
+                    if (v == v2) {
                         color = Color.PINK;
                     }
                 }
@@ -1802,37 +1809,38 @@ final public class Grid
 
         }
 
-        if (dv.isDocked) {
-            color = dvs.colorDocked.color;
+        if (v.isDocked) {
+            color = d.colorDocked.color;
         }
 
-        if (dv.isReserve) {
-            color = dvs.colorReserve.color;
+        if (v.isReserve) {
+            color = d.colorReserve.color;
         }
 
         return color;
 
     }
 
-    private double paintMonteCarloDiffusantVesicle(Graphics g, DiffusantVesicle dv, Color color, boolean PBC) {
+    private double paintMonteCarloDiffusantParticle(Graphics g, DiffusantParticle p, Color color, boolean PBC) {
 
         double xvoxel, yvoxel, zvoxel;
         double ivoxel, jvoxel, kvoxel, halfvoxelwidth;
         double addx, addy, addz, addi, addj;
+        double radius;
 
-        int i0, j0, vesiclePixels;
+        int i0, j0, particlePixels;
 
         boolean beyondLimits;
 
         Geometry geometry = Master.project.geometry;
 
-        if (dv == null) {
+        if (p == null) {
             return -1;
         }
 
-        xvoxel = geometry.computeVoxelX(dv.x);
-        yvoxel = geometry.computeVoxelY(dv.y);
-        zvoxel = geometry.computeVoxelZ(dv.z);
+        xvoxel = geometry.computeVoxelX(p.x);
+        yvoxel = geometry.computeVoxelY(p.y);
+        zvoxel = geometry.computeVoxelZ(p.z);
 
         kvoxel = getK(xvoxel, yvoxel, zvoxel);
 
@@ -1846,22 +1854,32 @@ final public class Grid
         i0 = (int) iVoxel2Pixels(ivoxel, jvoxel);
         j0 = (int) jVoxel2Pixels(ivoxel, jvoxel);
 
-        halfvoxelwidth = getHalfVoxelWidthK(kvoxel, dv.radius / Master.project.dx);
-        //halfvoxelwidth = dv.radius / Master.project.dx;
+        halfvoxelwidth = getHalfVoxelWidthK(kvoxel, p.radius / Master.project.dx);
+        //halfvoxelwidth = p.radius / Master.project.dx;
+        
+        if (phi_Keiding > 0) {
+            double radius_phi = p.radius * Math.sin(phi_Keiding * Math.PI / 180);
+            if (halfvoxelwidth < radius_phi) {
+                return -1;
+            }
+        }
 
-        vesiclePixels = (int) (halfvoxelwidth * pixelsPerVoxel);
+        particlePixels = (int) (halfvoxelwidth * pixelsPerVoxel);
 
-        vesiclePixels = Math.max(vesiclePixels, 1);
+        particlePixels = Math.max(particlePixels, 1);
 
-        i0 -= vesiclePixels;
-        j0 -= vesiclePixels;
+        i0 -= particlePixels;
+        j0 -= particlePixels;
 
         g.setColor(color);
 
-        g.fillOval(i0, j0, vesiclePixels * 2, vesiclePixels * 2);
+        g.fillOval(i0, j0, particlePixels * 2, particlePixels * 2);
+        
+        //radius = Master.project.dx * ( particlePixels * 1.0) / ( pixelsPerVoxel * 1.0);
 
-        if (!PBC || !redVesiclesPBC) {
-            return (vesiclePixels * 2.0);
+        if (!PBC || !redParticlesPBC) {
+            //return radius;
+            return (particlePixels * 2.0);
         }
 
         beyondLimits = false;
@@ -1870,26 +1888,26 @@ final public class Grid
         addy = 0;
         addz = 0;
 
-        if (dv.x < geometry.x1 + dv.radius) {
+        if (p.x < geometry.x1 + p.radius) {
             beyondLimits = true;
             addx = 1;
-        } else if (dv.x > geometry.x2 - dv.radius) {
+        } else if (p.x > geometry.x2 - p.radius) {
             beyondLimits = true;
             addx = -1;
         }
 
-        if (dv.y < geometry.y1 + dv.radius) {
+        if (p.y < geometry.y1 + p.radius) {
             beyondLimits = true;
             addy = 1;
-        } else if (dv.y > geometry.y2 - dv.radius) {
+        } else if (p.y > geometry.y2 - p.radius) {
             beyondLimits = true;
             addy = -1;
         }
 
-        if (dv.z < geometry.z1 + dv.radius) {
+        if (p.z < geometry.z1 + p.radius) {
             beyondLimits = true;
             addz = 1;
-        } else if (dv.z > geometry.z2 - dv.radius) {
+        } else if (p.z > geometry.z2 - p.radius) {
             beyondLimits = true;
             addz = -1;
         }
@@ -1914,16 +1932,16 @@ final public class Grid
         }
 
         g.setColor(Color.RED);
-        g.fillOval(i0, j0, vesiclePixels * 2, vesiclePixels * 2);
+        g.fillOval(i0, j0, particlePixels * 2, particlePixels * 2);
 
-        return (vesiclePixels * 2.0);
+        return (particlePixels * 2.0);
 
     }
 
     private double getHalfVoxelWidthK(double kvoxelCenter, double ijkVoxelRadius) {
 
         double kdelta = Math.abs(kvoxelCenter - kVoxel - 0.5);
-
+        //return ijkVoxelRadius;
         return Math.sqrt(ijkVoxelRadius * ijkVoxelRadius - kdelta * kdelta); // sphere
 
     }
@@ -2488,9 +2506,12 @@ final public class Grid
         double ax1, ay1, az1;
         double dxHalf = Master.project.dx / 2.0;
         double d = 0.005;
+        
+        //boolean allPoints = false;
+        boolean allPoints = true;
 
-        //boolean fill = false;
-        boolean fill = true;
+        boolean fill = false;
+        //boolean fill = true;
 
         //ColorD3D azColor = new ColorD3D( "azColor", new Color(150,0,150));
         //ColorD3D azColor = new ColorD3D( "azColor", new Color(0,100,255));
@@ -2509,7 +2530,7 @@ final public class Grid
 
             g2.setStroke(new BasicStroke(3));
 
-            if (false) {
+            if (allPoints) {
 
                 g2.setStroke(new BasicStroke(6));
 

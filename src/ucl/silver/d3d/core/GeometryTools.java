@@ -1,7 +1,6 @@
 package ucl.silver.d3d.core;
 
 import java.io.*;
-import java.util.Random;
 
 /**
  * <p>
@@ -9,12 +8,12 @@ import java.util.Random;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public final class GeometryTools {
 
@@ -195,7 +194,7 @@ public final class GeometryTools {
 
     }
 
-    public static boolean addCuboids(Geometry geometry, CoordinatesVoxels c, int N, double xdim, double ydim, double zdim, long seed) {
+    public static boolean addCuboids(Geometry geometry, CoordinatesVoxels c, int N, double xdim, double ydim, double zdim) {
 
         int i, j, k, success = 0, failure = 0, maxTrials = 200000;
         double rani, ranj, rank;
@@ -212,19 +211,12 @@ public final class GeometryTools {
             return true;
         }
 
-        if (seed < 0) {
-            seed = 8682522807148012L + System.nanoTime();
-            Master.log("addCuboids: random number generator seed: " + seed + "L");
-        }
-
-        Random ran = new Random(seed);
-
         while (success < N) {
 
             // generate random numbers and map to available range of points in space
-            rani = c.xVoxel1 + ran.nextDouble() * (c.xVoxel2 - c.xVoxel1);
-            ranj = c.yVoxel1 + ran.nextDouble() * (c.yVoxel2 - c.yVoxel1);
-            rank = c.zVoxel1 + ran.nextDouble() * (c.zVoxel2 - c.zVoxel1);
+            rani = c.xVoxel1 + Master.mt.nextDouble() * (c.xVoxel2 - c.xVoxel1);
+            ranj = c.yVoxel1 + Master.mt.nextDouble() * (c.yVoxel2 - c.yVoxel1);
+            rank = c.zVoxel1 + Master.mt.nextDouble() * (c.zVoxel2 - c.zVoxel1);
 
             // change to integers
             i = (int) rani;
@@ -253,7 +245,7 @@ public final class GeometryTools {
 
     }
 
-    public static double addEllipsoids(Geometry geometry, CoordinatesVoxels c, double radius, double axial_ratio, double volumeFraction, long seed, boolean exact, int ijkSelect, boolean cylinder, int linkNum, int extraVoxelsXYZ) {
+    public static double addEllipsoids(Geometry geometry, CoordinatesVoxels c, double radius, double axial_ratio, double volumeFraction, boolean exact, int ijkSelect, boolean cylinder, int linkNum, int extraVoxelsXYZ) {
 
         int i, j, k, iradius, ihalfLength, idiameter, numEllipsoids = 0;
         int oldVoxels, newVoxels, ellipsoidVoxels, spaceVoxels, iLast;
@@ -269,7 +261,6 @@ public final class GeometryTools {
         
         int[][][] spaceCopy = geometry.getSpaceCopy();
 
-        //int extra = 25;
         int xv1 = c.xVoxel1 - extraVoxelsXYZ;
         int yv1 = c.yVoxel1 - extraVoxelsXYZ;
         int zv1 = c.zVoxel1 - extraVoxelsXYZ;
@@ -280,13 +271,6 @@ public final class GeometryTools {
         int cx1, cy1, cz1, cx2, cy2, cz2;
 
         CoordinatesVoxels ctemp = new CoordinatesVoxels(geometry.project);
-
-        if (seed < 0) {
-            seed = 8682522807148012L + System.nanoTime();
-            //Master.log("addCylinders: random number generator seed: " + seed + "L");
-        }
-
-        Random ran = new Random(seed);
 
         if (useCoordinates) {
             maxEllipsoids = coordinates.length;
@@ -336,14 +320,14 @@ public final class GeometryTools {
 
                 if (randomIJK) {
 
-                    d = ran.nextDouble();
+                    d = Master.mt.nextDouble();
 
                     if (d < 0.3333333333) {
-                        ijkSelect = 0; // cylinderx
+                        ijkSelect = 0; // ellipsoid-x
                     } else if (d < 0.6666666666) {
-                        ijkSelect = 1; // cylindery
+                        ijkSelect = 1; // ellipsoid-y
                     } else {
-                        ijkSelect = 2; // cylinderz
+                        ijkSelect = 2; // ellipsoid-z
                     }
 
                 }
@@ -355,43 +339,84 @@ public final class GeometryTools {
                     if (link && (linkCounter > 0)) {
 
                         switch (ijkSelect) {
-                            case 0: // cylinderx
+                            case 0: // ellipsoid-x
                                 cx1 = coordinates[ii - linkCounter].xVoxel1;
-                                cy1 = coordinates[ii - linkCounter].yVoxel1 - 1 * iradius;
-                                cz1 = coordinates[ii - linkCounter].zVoxel1 - 1 * iradius;
+                                cy1 = coordinates[ii - linkCounter].yVoxel1 - iradius;
+                                cz1 = coordinates[ii - linkCounter].zVoxel1 - iradius;
                                 cx2 = coordinates[ii - linkCounter].xVoxel2;
-                                cy2 = coordinates[ii - linkCounter].yVoxel2 + 1 * iradius;
-                                cz2 = coordinates[ii - linkCounter].zVoxel2 + 1 * iradius;
+                                cy2 = coordinates[ii - linkCounter].yVoxel2 + iradius;
+                                cz2 = coordinates[ii - linkCounter].zVoxel2 + iradius;
+                                cy1 = Math.max(cy1, yv1 + iradius);
+                                cz1 = Math.max(cz1, zv1 + iradius);
+                                cy2 = Math.min(cy2, yv2 - iradius);
+                                cz2 = Math.min(cz2, zv2 - iradius);
                                 break;
-                            case 1: // cylindery
-                                cx1 = coordinates[ii - linkCounter].xVoxel1 - 1 * iradius;
+                            case 1: // ellipsoid-y
+                                cx1 = coordinates[ii - linkCounter].xVoxel1 - iradius;
                                 cy1 = coordinates[ii - linkCounter].yVoxel1;
-                                cz1 = coordinates[ii - linkCounter].zVoxel1 - 1 * iradius;
-                                cx2 = coordinates[ii - linkCounter].xVoxel2 + 1 * iradius;
+                                cz1 = coordinates[ii - linkCounter].zVoxel1 - iradius;
+                                cx2 = coordinates[ii - linkCounter].xVoxel2 + iradius;
                                 cy2 = coordinates[ii - linkCounter].yVoxel2;
-                                cz2 = coordinates[ii - linkCounter].zVoxel2 + 1 * iradius;
+                                cz2 = coordinates[ii - linkCounter].zVoxel2 + iradius;
+                                cx1 = Math.max(cx1, xv1 + iradius);
+                                cz1 = Math.max(cz1, zv1 + iradius);
+                                cx2 = Math.min(cx2, xv2 - iradius);
+                                cz2 = Math.min(cz2, zv2 - iradius);
                                 break;
-                            case 2: // cylinderz
-                                cx1 = coordinates[ii - linkCounter].xVoxel1 - 1 * iradius;
-                                cy1 = coordinates[ii - linkCounter].yVoxel1 - 1 * iradius;
+                            case 2: // ellipsoid-z
+                                cx1 = coordinates[ii - linkCounter].xVoxel1 - iradius;
+                                cy1 = coordinates[ii - linkCounter].yVoxel1 - iradius;
                                 cz1 = coordinates[ii - linkCounter].zVoxel1;
-                                cx2 = coordinates[ii - linkCounter].xVoxel2 + 1 * iradius;
-                                cy2 = coordinates[ii - linkCounter].yVoxel2 + 1 * iradius;
+                                cx2 = coordinates[ii - linkCounter].xVoxel2 + iradius;
+                                cy2 = coordinates[ii - linkCounter].yVoxel2 + iradius;
                                 cz2 = coordinates[ii - linkCounter].zVoxel2;
+                                cx1 = Math.max(cx1, xv1 + iradius);
+                                cy1 = Math.max(cy1, yv1 + iradius);
+                                cx2 = Math.min(cx2, xv2 - iradius);
+                                cy2 = Math.min(cy2, yv2 - iradius);
                                 break;
                             default:
                                 return 0;
                         }
 
-                        rani = cx1 + ran.nextDouble() * (cx2 - cx1);
-                        ranj = cy1 + ran.nextDouble() * (cy2 - cy1);
-                        rank = cz1 + ran.nextDouble() * (cz2 - cz1);
+                        rani = cx1 + Master.mt.nextDouble() * (cx2 - cx1);
+                        ranj = cy1 + Master.mt.nextDouble() * (cy2 - cy1);
+                        rank = cz1 + Master.mt.nextDouble() * (cz2 - cz1);
 
                     } else {
+                        
+                        switch (ijkSelect) {
+                            case 0: // ellipsoid-x
+                                cx1 = xv1;
+                                cy1 = yv1 + iradius;
+                                cz1 = zv1 + iradius;
+                                cx2 = xv2;
+                                cy2 = yv2 - iradius;
+                                cz2 = zv2 - iradius;
+                                break;
+                            case 1: // ellipsoid-y
+                                cx1 = xv1 + iradius;
+                                cy1 = yv1;
+                                cz1 = zv1 + iradius;
+                                cx2 = xv2 - iradius;
+                                cy2 = yv2;
+                                cz2 = zv2 - iradius;
+                                break;
+                            case 2: // ellipsoid-z
+                                cx1 = xv1 + iradius;
+                                cy1 = yv1 + iradius;
+                                cz1 = zv1;
+                                cx2 = xv2 - iradius;
+                                cy2 = yv2 - iradius;
+                                cz2 = zv2;
+                                break;
+                            default:
+                                return 0;
+                        }
 
-                        rani = xv1 + ran.nextDouble() * (xv2 - xv1);
-                        ranj = yv1 + ran.nextDouble() * (yv2 - yv1);
-                        rank = zv1 + ran.nextDouble() * (zv2 - zv1);
+                        rani = cx1 + Master.mt.nextDouble() * (cx2 - cx1);
+                        ranj = cy1 + Master.mt.nextDouble() * (cy2 - cy1);
+                        rank = cz1 + Master.mt.nextDouble() * (cz2 - cz1);
 
                     }
 
@@ -405,7 +430,7 @@ public final class GeometryTools {
 
                     switch (ijkSelect) {
 
-                        case 0: // cylinderx
+                        case 0: // ellipsoid-x
 
                             if (even) {
                                 coordinates[ii].setVoxels(i - ihalfLength + 1, j - iradius + 1, k - iradius + 1, i + ihalfLength, j + iradius, k + iradius);
@@ -419,7 +444,7 @@ public final class GeometryTools {
 
                             break;
 
-                        case 1: // cylindery
+                        case 1: // ellipsoid-y
 
                             if (even) {
                                 coordinates[ii].setVoxels(i - iradius + 1, j - ihalfLength + 1, k - iradius + 1, i + iradius, j + ihalfLength, k + iradius);
@@ -433,7 +458,7 @@ public final class GeometryTools {
 
                             break;
 
-                        case 2: // cylinderz
+                        case 2: // ellipsoid-z
 
                             if (even) {
                                 coordinates[ii].setVoxels(i - iradius + 1, j - iradius + 1, k - ihalfLength + 1, i + iradius, j + iradius, k + ihalfLength);

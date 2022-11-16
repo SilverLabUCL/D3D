@@ -6,12 +6,12 @@ package ucl.silver.d3d.core;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class RunMonteCarloAZ
         extends RunMonteCarlo {
@@ -68,7 +68,7 @@ public class RunMonteCarloAZ
     public int azNumTethers = 1;
     public double azTetherLength = 0.008; // um
     public Coordinates activeZoneTethering = null;
-    public DiffusantVesicle azDV = null;
+    public DiffusantParticle azDV = null;
 
     public boolean saveRelease = false;
     public boolean saveNumDocked = false;
@@ -264,16 +264,16 @@ public class RunMonteCarloAZ
             localDensityAll(true);
         }
 
-        vesicleStats();
+        particleStats();
 
-        if (connectVesicles) {
+        if (connectParticles) {
             avgConnectorLifeTime /= connectorLifeTimeCounter;
             Master.log("average connector life time (ms): " + avgConnectorLifeTime + " (n=" + Integer.toString(connectorLifeTimeCounter) + ")");
         }
 
         Master.log("final docked vesicles: " + dockedVesicles);
         Master.log("final reserve vesicles: " + reserveVesicles);
-        Master.log("final vesicle volume fraction: " + vesicleVolumeFraction);
+        Master.log("final vesicle volume fraction: " + particleVolumeFraction);
 
         if (replenishRate > 0) {
             Master.log("replenished vesicles: " + replenishCounter);
@@ -305,8 +305,8 @@ public class RunMonteCarloAZ
                     cancelSimulation(); // ERROR
                 }
 
-                saveVesiclePositions(0);
-                saveVesicleDensity("start");
+                saveParticlePositions(0);
+                saveParticleDensity("start");
 
             }
 
@@ -316,7 +316,7 @@ public class RunMonteCarloAZ
 
             while (runSimulation && !cancel && (time < project.simTime)) {
 
-                for (DiffusantVesicles d : diffusants) {
+                for (DiffusantParticles d : diffusants) {
                     d.save(); // save diffusant variables
                 }
 
@@ -365,9 +365,9 @@ public class RunMonteCarloAZ
                 //    runSimulation = false;
                 //}
 
-                if (connectVesicles) {
-                    connectVesicles();
-                    unconnectVesicles();
+                if (connectParticles) {
+                    connectParticles();
+                    unconnectParticles();
                 }
 
                 if (saveResidenceTime) {
@@ -437,10 +437,7 @@ public class RunMonteCarloAZ
 
                 itime += 1;
                 time += project.dt;
-
-                if (timer) {
-                    timer2.timer(time);
-                }
+                timer2.timer(time);
 
                 if ((releaseLimit > 0) && (releaseCounter >= releaseLimit)) {
                     cancel = true;
@@ -470,7 +467,7 @@ public class RunMonteCarloAZ
             return true;
         }
 
-        if (initDiffusantVesiclesArray()) {
+        if (initDiffusantParticlesArray()) {
             return true;
         }
 
@@ -486,7 +483,7 @@ public class RunMonteCarloAZ
             return true;
         }
 
-        if (initVesicles()) {
+        if (initParticles()) {
             return true;
         }
 
@@ -502,7 +499,7 @@ public class RunMonteCarloAZ
             return true;
         }
 
-        if (initVesicleRandom && initVesiclesRandom()) {
+        if (initParticleRandom && initParticlesRandom()) {
             return true;
         }
 
@@ -516,21 +513,21 @@ public class RunMonteCarloAZ
             return true;
         }
 
-        if (removeVesicleOverlap && removeVesicleOverlap()) {
+        if (removeParticleOverlap && removeParticleOverlap()) {
             return true;
         }
 
-        if (initVesiclesImmobile()) {
+        if (initParticlesImmobile()) {
             return true;
         }
 
         initConnectors();
 
-        vesicleStats();
+        particleStats();
 
         replenishCoordinates = new Coordinates(project, geometry);
 
-        if (!freeDiffusion && (vesicleVolumeFraction > 0.44)) {
+        if (!freeDiffusion && (particleVolumeFraction > 0.44)) {
             replenishRate = 0; // TAKES TOO LONG
             Master.log("TURNED OFF REPLENISHING: replenishRate = 0");
         }
@@ -566,13 +563,13 @@ public class RunMonteCarloAZ
         azHeight = 0.3;
         initActiveZone();
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 vaz = (DiffusantVesicleAZ) v;
 
@@ -663,8 +660,8 @@ public class RunMonteCarloAZ
             activeZoneTethering.setShape(activeZone.shape);
 
             if (azNumTethers > 0) {
-                azDV = new DiffusantVesicle(project, "AZ", 0, 0, 0, 0, 0);
-                azDV.connectTo = new DiffusantVesicle[azNumTethers];
+                azDV = new DiffusantParticle(project, "AZ", 0, 0, 0, 0, 0);
+                azDV.connectTo = new DiffusantParticle[azNumTethers];
                 azDV.connectorOffTime = new double[azNumTethers];
             }
 
@@ -675,7 +672,7 @@ public class RunMonteCarloAZ
     }
 
     @Override
-    public boolean initVesiclesImmobile() {
+    public boolean initParticlesImmobile() {
 
         double xx1, xx2, yy1, yy2, zz1, zz2;
 
@@ -698,7 +695,7 @@ public class RunMonteCarloAZ
 
         }
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
             if (d == null) {
                 continue;
@@ -706,7 +703,7 @@ public class RunMonteCarloAZ
 
             //Master.log(keepClear.printDimensions());
 
-            if (d.initImmobileVesicles(keepClear)){
+            if (d.initImmobileParticles(keepClear)){
                 return true;
             }
 
@@ -716,9 +713,9 @@ public class RunMonteCarloAZ
 
     }
 
-    public boolean initVesicleRandom(DiffusantVesicle dv, Coordinates c, Coordinates exclude, boolean allowOverlaps, boolean excludeAZ, double distanceFromAZ, int overlapTrialLimit, int absLimit, double az_z) {
+    public boolean initVesicleRandom(DiffusantParticle dv, Coordinates c, Coordinates exclude, boolean allowOverlaps, boolean excludeAZ, double distanceFromAZ, long trialLimit, double az_z) {
 
-        int trial = 0;
+        long trial = 0;
         double x, y, z;
         double dx, dy, dz, d2AZ;
         boolean overlap;
@@ -733,18 +730,11 @@ public class RunMonteCarloAZ
 
         while (true) {
 
-            trial++;
-
-            if (trial >= absLimit) {
-                Master.log("warning: initVesicleRandom: reached trial limit");
-                return true;
-            }
-
-            x = (mt.nextDouble() * (c.x2 - c.x1)) + c.x1;
-            y = (mt.nextDouble() * (c.y2 - c.y1)) + c.y1;
+            x = (Master.mt.nextDouble() * (c.x2 - c.x1)) + c.x1;
+            y = (Master.mt.nextDouble() * (c.y2 - c.y1)) + c.y1;
 
             if (Double.isNaN(az_z)) {
-                z = (mt.nextDouble() * (c.z2 - c.z1)) + c.z1;
+                z = (Master.mt.nextDouble() * (c.z2 - c.z1)) + c.z1;
             } else {
                 z = az_z;
             }
@@ -783,7 +773,7 @@ public class RunMonteCarloAZ
                 }
             }
 
-            if (!setVesicleLocation(dv, x, y, z, true)){
+            if (!setParticleLocation(dv, x, y, z, true)){
                 continue;
             }
 
@@ -798,11 +788,23 @@ public class RunMonteCarloAZ
             overlap = false;
 
             if (!freeDiffusion) {
-                overlap = testVesicleOverlap(dv, null) != null;
+                overlap = testParticleOverlap(dv, null) != null;
             }
-
-            if (!overlap || (allowOverlaps && (trial > overlapTrialLimit))) {
+            
+            if (!overlap) {
                 return (!addToVoxelList(dv));
+            }
+            
+            trial++;
+            
+            if (trial > trialLimit) {
+                if (allowOverlaps) {
+                    return (!addToVoxelList(dv));
+                } else {
+                    Master.log("initVesicleRandom warning: reached trial limit");
+                    return true;
+                }
+                
             }
 
         }
@@ -810,7 +812,7 @@ public class RunMonteCarloAZ
     }
 
     @Override
-    public boolean setVesicleLocation(DiffusantVesicle dv, double x, double y, double z, boolean initStartLocation) {
+    public boolean setParticleLocation(DiffusantParticle dv, double x, double y, double z, boolean initStartLocation) {
 
         int xVoxel, yVoxel, zVoxel;
 
@@ -886,7 +888,7 @@ public class RunMonteCarloAZ
     }
 
     @Override
-    public boolean initVesiclesRandom() {
+    public boolean initParticlesRandom() {
 
         boolean allowOverlaps = true;
 
@@ -899,9 +901,9 @@ public class RunMonteCarloAZ
 
         Master.log("randomly placing ready vesicles...");
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
@@ -911,7 +913,7 @@ public class RunMonteCarloAZ
                 c = new Coordinates(project, d.coordinates);
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 if (!(v instanceof DiffusantVesicleAZ)) {
                     continue;
@@ -923,7 +925,7 @@ public class RunMonteCarloAZ
                     continue;
                 }
 
-                if (initVesicleRandom(vaz, c, null, allowOverlaps, azExcludeReadyinit, -1, overlapTrialLimit, absLimit, Double.NaN)) {
+                if (initVesicleRandom(vaz, c, null, allowOverlaps, azExcludeReadyinit, -1, initParticleRandomTrialLimit, Double.NaN)) {
                     return true;
                 }
 
@@ -936,7 +938,7 @@ public class RunMonteCarloAZ
     }
 
     @Override
-    public boolean removeVesicleOverlap() {
+    public boolean removeParticleOverlap() {
 
         int radiusNM, lastRadiusNM = 0, count = 0;
         double halfDistance = 0;
@@ -946,7 +948,7 @@ public class RunMonteCarloAZ
             return false; // OK
         }
 
-        if (!testVesicleOverlap()){
+        if (!particleOverlapExists()){
             return false; // OK
         }
 
@@ -954,14 +956,14 @@ public class RunMonteCarloAZ
             return true;
         }
 
-        vesicleStats(); // will update vesicles step size
+        particleStats(); // will update vesicles step size
 
-        removingVesicleOverlap = true;
+        removingParticleOverlap = true;
         dockingOn = false;
 
         Master.log("elimination of vesicle overlap...");
 
-        while (halfDistance < minVesicleRadius) {
+        while (halfDistance < minParticleRadius) {
 
             halfDistance = 0.5 * minDistance();
 
@@ -975,13 +977,13 @@ public class RunMonteCarloAZ
 
             // set current diameter to minimal distance between vesicles
 
-            for (DiffusantVesicles d : diffusants) {
+            for (DiffusantParticles d : diffusants) {
 
                 //if ((diffusant[j] == null) || (diffusant[j].vesicle == null)) {
                 //    continue;
                 //}
 
-                for (DiffusantVesicle v : d.vesicles) {
+                for (DiffusantParticle v : d.particles) {
                     //if (v.insideGeometry) {
                         //v.radius = Math.min(halfDistance, diffusant[j].meanRadius);
                         v.radius = halfDistance;
@@ -994,27 +996,27 @@ public class RunMonteCarloAZ
 
             count++;
 
-            if (count > absLimit) {
+            if (count > removeParticleOverlapTrialLimit) {
                 break;
             }
 
         }
 
         dockingOn = saveDockingOn;
-        removingVesicleOverlap = false;
+        removingParticleOverlap = false;
 
-        if (testVesicleOverlap()) {
+        if (particleOverlapExists()) {
 
             error("removeVesicleOverlap: failed to remove vesicle overlap.");
 
-            for (DiffusantVesicles d : diffusants) {
+            for (DiffusantParticles d : diffusants) {
 
                 //if ((d == null) || (d.vesicles == null)) {
                     //continue;
                 //}
 
-                for (DiffusantVesicle v : d.vesicles) {
-                    v.radius = d.meanRadius;
+                for (DiffusantParticle v : d.particles) {
+                    v.radius = d.radiusMean;
                     v.x = v.x0;
                     v.y = v.y0;
                     v.z = v.z0;
@@ -1026,14 +1028,14 @@ public class RunMonteCarloAZ
 
         }
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
             //if ((d == null) || (d.vesicles == null)) {
                 //continue;
             //}
 
-            for (DiffusantVesicle v : d.vesicles) {
-                v.radius = d.meanRadius;
+            for (DiffusantParticle v : d.particles) {
+                v.radius = d.radiusMean;
                 v.x0 = v.x;
                 v.y0 = v.y;
                 v.z0 = v.z;
@@ -1072,9 +1074,9 @@ public class RunMonteCarloAZ
 
         //Master.log("randomly placing docked vesicles...");
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
@@ -1087,7 +1089,7 @@ public class RunMonteCarloAZ
             if (daz.dockedVesiclesInit > 0) {
                 initNum = daz.dockedVesiclesInit;
             } else if (daz.dockedVesiclesInitFraction > 0) {
-                vesVolume = 4.0 * Math.PI * Math.pow(daz.setMeanRadius, 3) / 3.0;
+                vesVolume = 4.0 * Math.PI * Math.pow(daz.setRadiusMean, 3) / 3.0;
                 initNum = (int) (daz.dockedVesiclesInitFraction * activeZone.geometryVolume() / vesVolume) ;
             } else {
                 continue;
@@ -1104,7 +1106,7 @@ public class RunMonteCarloAZ
             count = 0;
             j = 0;
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 if (!(v instanceof DiffusantVesicleAZ)) {
                     continue;
@@ -1122,7 +1124,7 @@ public class RunMonteCarloAZ
                     az_z = geometry.z2 - zwidth;
                 }
 
-                if (initVesicleRandom(vaz, activeZone, null, allowOverlaps, excludeAZ, -1, overlapTrialLimit, absLimit, az_z)) {
+                if (initVesicleRandom(vaz, activeZone, null, allowOverlaps, excludeAZ, -1, initParticleRandomTrialLimit, az_z)) {
                     Master.log("failed to place docked vesicle #" + j++);
                     return true;
                 }
@@ -1145,7 +1147,7 @@ public class RunMonteCarloAZ
 
     }
 
-    public int initVesiclesLattice(Coordinates c, DiffusantVesicles dvs, int numVesicles) {
+    public int initVesiclesLattice(Coordinates c, DiffusantParticles dvs, int numVesicles) {
 
         double r, jj;
         double x, y, z;
@@ -1156,9 +1158,9 @@ public class RunMonteCarloAZ
         double zstep = Math.sqrt(6) * 2.0 / 3.0;
         double sqrt3 = Math.sqrt(3);
 
-        double xlimit = c.x2 - 0 * dvs.setMeanRadius;
-        double ylimit = c.y2 - 0 * dvs.setMeanRadius;
-        double zlimit = c.z2 - 0 * dvs.setMeanRadius;
+        double xlimit = c.x2 - 0 * dvs.setRadiusMean;
+        double ylimit = c.y2 - 0 * dvs.setRadiusMean;
+        double zlimit = c.z2 - 0 * dvs.setRadiusMean;
 
         boolean finished = false;
 
@@ -1167,7 +1169,7 @@ public class RunMonteCarloAZ
         //nVesicles = dv.length;
         //newVesicleVolume = maxPacking * 1.0 / nVesicles;
         //r = Math.pow((3 * newVesicleVolume / (4 * Math.PI)), (1 / 3.0));
-        r = dvs.setMeanRadius + 0.00000001;
+        r = dvs.setRadiusMean + 0.00000001;
 
         iv = 0;
         k = 0;
@@ -1204,9 +1206,9 @@ public class RunMonteCarloAZ
 
                     if (geometry.isInside(x, y, z) && c.isInside(x, y, z)) {
 
-                        vaz = (DiffusantVesicleAZ) dvs.vesicles[iv];
+                        vaz = (DiffusantVesicleAZ) dvs.particles[iv];
 
-                        if (!setVesicleLocation(vaz, x, y, z, true)) {
+                        if (!setParticleLocation(vaz, x, y, z, true)) {
                             return iv;
                         }
 
@@ -1221,7 +1223,7 @@ public class RunMonteCarloAZ
 
                         iv++;
 
-                        if ((iv == numVesicles) || (iv == dvs.vesicles.length)) {
+                        if ((iv == numVesicles) || (iv == dvs.particles.length)) {
                             finished = true;
                             break;
                         }
@@ -1258,13 +1260,13 @@ public class RunMonteCarloAZ
             return true;
         }
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 if (v == null) {
                     continue;
@@ -1383,7 +1385,7 @@ public class RunMonteCarloAZ
             }
         }
 
-        if ((releaseProb < 1.0) && (mt.nextDouble() > releaseProb)) {
+        if ((releaseProb < 1.0) && (Master.mt.nextDouble() > releaseProb)) {
             //Master.log("release failure at time " + time);
             return false;
         }
@@ -1401,7 +1403,7 @@ public class RunMonteCarloAZ
         //    Master.log("dx=" + Math.abs(dv.x - dv.x0) + ", dy=" + Math.abs(dv.y - dv.y0) + ",dz=" + Math.abs(dv.z - dv.z0));
         //}
 
-        if (connectVesicles) {
+        if (connectParticles) {
 
             vaz.unconnectAll();
 
@@ -1458,7 +1460,8 @@ public class RunMonteCarloAZ
         double[] moved;
 
         DiffusantVesicleAZ testVesicle = new DiffusantVesicleAZ(project, "ready", 0, 0, 0, 0, 0);
-        DiffusantVesicle dv2, dv3, odv;
+        DiffusantParticle dv2;
+        DiffusantParticle dv3, odv;
 
         int numConnections = vaz.numberOfConnections(false);
 
@@ -1526,7 +1529,7 @@ public class RunMonteCarloAZ
                 //dy = 0;
                 //dz = rstep;
 
-                if (!setVesicleLocation(testVesicle, testVesicle.x + dx, testVesicle.y + dy, testVesicle.z + dz, false)) {
+                if (!setParticleLocation(testVesicle, testVesicle.x + dx, testVesicle.y + dy, testVesicle.z + dz, false)) {
                     move = false;
                     //Master.log("failed to set vesicle location " + (1000 * j * rstep));
                 }
@@ -1538,7 +1541,7 @@ public class RunMonteCarloAZ
 
                 if (move) {
 
-                    odv = testVesicleOverlap(testVesicle, dv2);
+                    odv = testParticleOverlap(testVesicle, dv2);
 
                     if (odv != null) {
                         move = false;
@@ -1605,7 +1608,7 @@ public class RunMonteCarloAZ
     }
 
     @Override
-    public void connectVesicles() {
+    public void connectParticles() {
 
         int neighbors;
         double sqrDistance;
@@ -1617,13 +1620,13 @@ public class RunMonteCarloAZ
             Master.exit("azDV is null");
         }
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 vaz = (DiffusantVesicleAZ) v;
 
@@ -1636,7 +1639,7 @@ public class RunMonteCarloAZ
                     inside = isInsideActiveZoneTethering(vaz);
 
                     if (inside) {
-                        if (azDV.connectToNew(vaz, mt, Double.POSITIVE_INFINITY, time)) {
+                        if (azDV.connectToNew(vaz, Double.POSITIVE_INFINITY, time)) {
                             vaz.isTetheredToAZ = true;
                             //Master.log("tethered to AZ " + dv);
                         } else {
@@ -1660,7 +1663,7 @@ public class RunMonteCarloAZ
 
                 for (int k = 0; k < neighbors; k++) {
 
-                    kvesicle = (DiffusantVesicleAZ) vaz.voxel.neighbors[k].firstReady;
+                    kvesicle = (DiffusantVesicleAZ) vaz.voxel.neighbors[k].firstParticleInChain;
 
                     while (kvesicle != null) {
 
@@ -1676,9 +1679,9 @@ public class RunMonteCarloAZ
 
                                 if (sqrDistance < azPermitConnectorRadius * azPermitConnectorRadius) {
 
-                                    if (mt.nextDouble() < connectRate * project.dt) {
+                                    if (Master.mt.nextDouble() < connectRate * project.dt) {
 
-                                        if (kvesicle.connectToNew(vaz, mt, unconnectRate, time)) {
+                                        if (kvesicle.connectToNew(vaz, unconnectRate, time)) {
 
                                             avgConnectorLifeTime += vaz.connectorLifeTime;
                                             connectorLifeTimeCounter += 1;
@@ -1719,13 +1722,13 @@ public class RunMonteCarloAZ
 
         DiffusantVesicleAZ vaz;
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 vaz = (DiffusantVesicleAZ) v;
 
@@ -1739,7 +1742,7 @@ public class RunMonteCarloAZ
                     continue;
                 }
 
-                avgD += vaz.localD;
+                avgD += vaz.Dlocal;
                 count++;
 
             }
@@ -1768,13 +1771,13 @@ public class RunMonteCarloAZ
 
         DiffusantVesicleAZ vaz;
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 vaz = (DiffusantVesicleAZ) v;
 
@@ -1850,13 +1853,13 @@ public class RunMonteCarloAZ
         //    Master.log("" + zcnt + " volume = " + volume[zcnt]);
         //}
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 vaz = (DiffusantVesicleAZ) v;
 
@@ -1865,7 +1868,7 @@ public class RunMonteCarloAZ
                 }
 
                 if (vesVolume == 0) {
-                    vesVolume = DiffusantVesicle.volume(vaz.radius); // all the same
+                    vesVolume = DiffusantParticle.volume(vaz.radius); // all the same
                 }
 
                 dmin = minDistanceToAZ(vaz.x, vaz.y, vaz.z);
@@ -1930,7 +1933,7 @@ public class RunMonteCarloAZ
 
         double vesVolume = 0;
 
-        DiffusantVesicle dv;
+        DiffusantParticle dv;
 
         zstep = 0.03;
 
@@ -1956,15 +1959,15 @@ public class RunMonteCarloAZ
 
                     numVes = 0;
 
-                    dv = v.firstReady;
+                    dv = v.firstParticleInChain;
 
                     if ((dv != null) && (vesVolume == 0)) {
-                        vesVolume = DiffusantVesicle.volume(dv.radius); // all the same
+                        vesVolume = DiffusantParticle.volume(dv.radius); // all the same
                     }
 
                     while (dv != null) {
                         numVes++;
-                        dv = dv.nextReady;
+                        dv = dv.nextParticleInChain;
                     }
 
                     d = minDistanceToAZ(v.x, v.y, v.z);
@@ -2043,13 +2046,13 @@ public class RunMonteCarloAZ
             return true;
         }
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 if (v == null) {
                     continue;
@@ -2156,7 +2159,7 @@ public class RunMonteCarloAZ
             y = vaz.y;
             z = vaz.z;
 
-            error = initVesicleRandom(vaz, replenishCoordinates, replenishCoordinatesExclude, allowOverlaps, excludeAZ, replenishFromAZdistance, overlapTrialLimit, absLimit, Double.NaN);
+            error = initVesicleRandom(vaz, replenishCoordinates, replenishCoordinatesExclude, allowOverlaps, excludeAZ, replenishFromAZdistance, initParticleRandomTrialLimit, Double.NaN);
             
             if (error) {
 
@@ -2190,8 +2193,8 @@ public class RunMonteCarloAZ
 
     }
 
-    //public boolean setVesicleLocation(DiffusantVesicleAZ vaz, double x, double y, double z, boolean initStartLocation) {
-        //return super.setVesicleLocation(vaz, x, y, z, initStartLocation);
+    //public boolean setParticleLocation(DiffusantVesicleAZ vaz, double x, double y, double z, boolean initStartLocation) {
+        //return super.setParticleLocation(vaz, x, y, z, initStartLocation);
     //}
 
     public boolean moveVesicle(DiffusantVesicleAZ vaz) {
@@ -2200,29 +2203,29 @@ public class RunMonteCarloAZ
         //double stepx, stepy, stepz;
 
         if (hydrodynamicsLocalD || hydroWallZ) {
-            step3 = vaz.localStep3;
+            step3 = vaz.step3Local;
         } else {
             step3 = vaz.step3;
         }
 
         //if (rstep < 0) {
-        //    Master.exit("moveVesicle: bad rstep: " + rstep);
+        //    Master.exit("moveParticle: bad rstep: " + rstep);
         //    return false;
         //}
 
-        if (mt.nextDouble() < 0.5) {
+        if (Master.mt.nextDouble() < 0.5) {
             stepx = step3;
         } else {
             stepx = -step3;
         }
 
-        if (mt.nextDouble() < 0.5) {
+        if (Master.mt.nextDouble() < 0.5) {
             stepy = step3;
         } else {
             stepy = -step3;
         }
 
-        if (mt.nextDouble() < 0.5) {
+        if (Master.mt.nextDouble() < 0.5) {
             stepz = step3;
         } else {
             stepz = -step3;
@@ -2232,7 +2235,7 @@ public class RunMonteCarloAZ
             stepz = 0;
         }
 
-        return setVesicleLocation(vaz, vaz.x + stepx, vaz.y + stepy, vaz.z + stepz, false);
+        return setParticleLocation(vaz, vaz.x + stepx, vaz.y + stepy, vaz.z + stepz, false);
 
     }
 
@@ -2242,28 +2245,28 @@ public class RunMonteCarloAZ
         //double stepx, stepy, stepz;
 
         if (hydrodynamicsLocalD) {
-            step3 = vaz.localStep3;
+            step3 = vaz.step3Local;
         } else {
             step3 = vaz.step3;
         }
 
-        if (removingVesicleOverlap) {
-            step3 = removeVesicleOverlapStep3;
+        if (removingParticleOverlap) {
+            step3 = removeParticleOverlapStep3;
         }
 
         //if (rstep <= 0) {
-        //    Master.exit("moveVesicleGauss: bad rstep: " + rstep);
+        //    Master.exit("moveParticleGauss: bad rstep: " + rstep);
         //}
 
-        stepx = ranGauss() * step3;
-        stepy = ranGauss() * step3;
-        stepz = ranGauss() * step3;
+        stepx = Master.randomGauss() * step3;
+        stepy = Master.randomGauss() * step3;
+        stepz = Master.randomGauss() * step3;
 
         if (vaz.isDocked) {
             stepz = 0;
         }
 
-        return setVesicleLocation(vaz, vaz.x + stepx, vaz.y + stepy, vaz.z + stepz, false);
+        return setParticleLocation(vaz, vaz.x + stepx, vaz.y + stepy, vaz.z + stepz, false);
 
     }
 
@@ -2273,7 +2276,7 @@ public class RunMonteCarloAZ
         double dz, b_ll, b_T;
 
         if (hydrodynamicsLocalD) {
-            step3 = vaz.localStep3;
+            step3 = vaz.step3Local;
         } else if (hydrodynamicsDscale) {
             //step3 = localDensityFastHydroWallz(dv); // using Michailidou model instead
             step3 = vaz.step3;
@@ -2281,13 +2284,13 @@ public class RunMonteCarloAZ
             step3 = vaz.step3;
         }
 
-        if (removingVesicleOverlap) {
+        if (removingParticleOverlap) {
 
-            step3 = removeVesicleOverlapStep3;
+            step3 = removeParticleOverlapStep3;
 
-            stepx = ranGauss() * step3;
-            stepy = ranGauss() * step3;
-            stepz = ranGauss() * step3;
+            stepx = Master.randomGauss() * step3;
+            stepy = Master.randomGauss() * step3;
+            stepz = Master.randomGauss() * step3;
 
         } else {
 
@@ -2305,9 +2308,9 @@ public class RunMonteCarloAZ
             b_ll = Math.sqrt(b_ll);
             b_T = Math.sqrt(b_T);
 
-            stepx = ranGauss() * step3 * b_ll;
-            stepy = ranGauss() * step3 * b_ll;
-            stepz = ranGauss() * step3 * b_T;
+            stepx = Master.randomGauss() * step3 * b_ll;
+            stepy = Master.randomGauss() * step3 * b_ll;
+            stepz = Master.randomGauss() * step3 * b_T;
 
         }
 
@@ -2319,7 +2322,7 @@ public class RunMonteCarloAZ
         //Master.log("" + (dv.localD/1.397657228105222E-4));
         //dv.localDw = (3 * step3 * step3) / (6 * project.dt);
 
-        return setVesicleLocation(vaz, vaz.x + stepx, vaz.y + stepy, vaz.z + stepz, false);
+        return setParticleLocation(vaz, vaz.x + stepx, vaz.y + stepy, vaz.z + stepz, false);
 
     }
 
@@ -2337,15 +2340,15 @@ public class RunMonteCarloAZ
             return 0;
         }
 
-        for (DiffusantVesicles d : diffusants) {
+        for (DiffusantParticles d : diffusants) {
 
-            if ((d == null) || (d.vesicles == null)) {
+            if ((d == null) || (d.particles == null)) {
                 continue;
             }
 
-            d.shuffleVesicles();
+            d.shuffleParticles();
 
-            for (DiffusantVesicle v : d.vesicles) {
+            for (DiffusantParticle v : d.particles) {
 
                 if (!(v instanceof DiffusantVesicleAZ)) {
                     continue;
@@ -2371,7 +2374,7 @@ public class RunMonteCarloAZ
                     }
                 }
 
-                if (ok && !removingVesicleOverlap) {
+                if (ok && !removingParticleOverlap) {
 
                     if (azHemisphere) {
                         outsideAZ = activeZone.isOutsideEllipsoid(testVesicle.x, testVesicle.y, testVesicle.z, vaz.radius);
@@ -2440,7 +2443,7 @@ public class RunMonteCarloAZ
 
                 if (ok && !freeDiffusion) {
 
-                    overlap = testVesicleOverlap(testVesicle, vaz) != null;
+                    overlap = testParticleOverlap(testVesicle, vaz) != null;
 
                     if (overlap) {
                         ok = false;
@@ -2449,11 +2452,11 @@ public class RunMonteCarloAZ
 
                 }
 
-                if (ok && connectVesicles && (vaz.connectTo != null)) {
+                if (ok && connectParticles && (vaz.connectTo != null)) {
 
                     moveTethered = true;
 
-                    for (DiffusantVesicle vaz2 : vaz.connectTo) {
+                    for (DiffusantParticle vaz2 : vaz.connectTo) {
 
                         if (vaz2 == null) {
                             continue;
@@ -2503,7 +2506,7 @@ public class RunMonteCarloAZ
                     removeFromVoxelList(vaz, vaz.voxel);
                 }
 
-                setVesicleLocation(vaz, testVesicle.x, testVesicle.y, testVesicle.z, false);
+                setParticleLocation(vaz, testVesicle.x, testVesicle.y, testVesicle.z, false);
                 //dv.localD = testVesicle.localD;
 
                 if (!sameVoxel) {

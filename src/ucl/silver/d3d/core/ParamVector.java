@@ -10,12 +10,12 @@ import java.io.Serializable;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  *
  * Description: a class that holds parameters (ParamObjects) to be displayed in
  * the front table of D3D (PanelParams). This class is to be extended by other
@@ -36,14 +36,14 @@ import java.io.Serializable;
  */
 public class ParamVector implements Serializable {
 
-    private transient ParamObject[] vector = null;
-    private transient ParamVector[] userRegistry = null;
-
     public String name = null;
 
     private String D3Dversion = null;
 
     public Project project;
+    
+    private transient ParamObject[] vector = null;
+    private transient ParamVector[] userRegistry = null;
 
     public ParamVector(Project p) {
         project = p;
@@ -136,31 +136,36 @@ public class ParamVector implements Serializable {
     }
 
     public boolean createVector(boolean close) {
+        
+        int j = 0;
+        int maxNumSuperClasses = 20; // can increase if necessary
+        
+        Class[] c = new Class[maxNumSuperClasses];
 
-        int count;
-
-        //if (vector != null) {
-        //    return false; // already exists
-        //}
         vector = null;
 
         String NAME = getClassName(getClass());
 
         addClassParam(NAME);
-
-        count = addParams(getClass().getSuperclass().getSuperclass()); // first add parameters from super-superclass
-
-        //if (count > 0) {
-            //addBlankParam();
-        //}
-
-        count = addParams(getClass().getSuperclass()); // add parameters from superclass
-
-        //if (count > 0) {
-            //addBlankParam();
-        //}
-
-        count = addParams(getClass());
+        
+        c[0] = getClass();
+        
+        if (c[0] == null) {
+            return false;
+        }
+        
+        for (int i = 1; i < c.length; i++) {
+            if (c[i-1] == null) {
+                break;
+            } else {
+                c[i] = c[i-1].getSuperclass();
+                j = i;
+            }
+        }
+        
+        for (int i = j; i >= 0; i--) {
+            addParams(c[i]);
+        }
 
         if (close) {
             addEndClassParam(NAME);
@@ -202,7 +207,7 @@ public class ParamVector implements Serializable {
 
         Field[] fields = c.getDeclaredFields(); // create an array of all parameters in the object
 
-        if (fields.length == 1) {
+        if (fields.length == 0) {
             return count;
         }
 

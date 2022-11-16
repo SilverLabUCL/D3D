@@ -9,12 +9,12 @@ import java.awt.Color;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class Geometry extends CoordinatesVoxels {
 
@@ -759,7 +759,7 @@ public class Geometry extends CoordinatesVoxels {
         boolean iPSFOK = checkPSFArrayNum(iPSF);
         boolean dPSFOK = checkPSFArrayNum(dPSF);
 
-        Master.log("initializing voxel arrays...");
+        Master.log("initializing voxel arrays ( " + xVoxels + " x " + yVoxels +" x " + zVoxels + " )...");
 
         voxelSpace = new Voxel[xVoxels][yVoxels][zVoxels];
 
@@ -769,6 +769,9 @@ public class Geometry extends CoordinatesVoxels {
 
                     voxelSpace[i][j][k] = new Voxel();
                     voxelSpace[i][j][k].isSpace = isSpace(i, j, k);
+                    voxelSpace[i][j][k].i = i;
+                    voxelSpace[i][j][k].j = j;
+                    voxelSpace[i][j][k].k = k;
                     voxelSpace[i][j][k].x = computeX(i);
                     voxelSpace[i][j][k].y = computeY(j);
                     voxelSpace[i][j][k].z = computeZ(k);
@@ -982,6 +985,9 @@ public class Geometry extends CoordinatesVoxels {
 
                     voxelSpacePBC[i][j][k] = new VoxelPBC();
                     voxelSpacePBC[i][j][k].isSpace = isSpace(i, j, k);
+                    voxelSpacePBC[i][j][k].i = i;
+                    voxelSpacePBC[i][j][k].j = j;
+                    voxelSpacePBC[i][j][k].k = k;
                     voxelSpacePBC[i][j][k].x = computeX(i);
                     voxelSpacePBC[i][j][k].y = computeY(j);
                     voxelSpacePBC[i][j][k].z = computeZ(k);

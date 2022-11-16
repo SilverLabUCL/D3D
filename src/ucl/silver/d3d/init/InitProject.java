@@ -9,14 +9,17 @@ import ucl.silver.d3d.utils.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class InitProject extends ParamVector {
+    
+    public String directory = "";
+    public String folder = "Testing";
 
     Geometry geometry;
     CoordinatesVoxels coordinates; // general purpose coordinates
@@ -62,6 +65,29 @@ public class InitProject extends ParamVector {
     @Override
     public String help(String name) {
         return super.help(name);
+    }
+    
+    public void initDirectoryJason() {
+        
+        String os;
+        String dirWin = "/Jason/D3D/Simulations/";
+        String dirMac = "/Users/jason/Documents/D3D/Simulations/";
+
+        if (!Master.foundMainStartUpArguments) {
+            
+            os = System.getProperty("os.name").toLowerCase();
+
+            if (os.contains("win")) {
+                directory = dirWin;
+            } else if (os.contains("mac")) {
+                directory = dirMac;
+            }
+
+            project.directory = directory;
+            project.folder = folder;
+
+        }
+
     }
 
     public boolean initCube() {
