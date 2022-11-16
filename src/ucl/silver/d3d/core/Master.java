@@ -85,7 +85,7 @@ public final class Master {
     //private static String initClassAndFunction = "InitProject.initCube";
     
     //private static String initClassAndFunction = "InitFD_Demo.initCalciumChannel";
-    //private static String initClassAndFunction = "InitFD_Demo.initGlutamateSource";
+    private static String initClassAndFunction = "InitFD_Demo.initGlutamateSource";
     //private static String initClassAndFunction = "InitFD_Demo.initGlutamateSourceCleft";
     //private static String initClassAndFunction = "InitFD_Demo.initCrankCylinder";
     //private static String initClassAndFunction = "InitFD_Demo.initCrankCylinderMovie";
@@ -99,7 +99,7 @@ public final class Master {
     //private static String initClassAndFunction = "InitMC_Demo.initFrapMFT";
     //private static String initClassAndFunction = "InitMC_Demo.initActiveZone";
     
-    private static String initClassAndFunction = "InitMC_Projection_Demo.initPrompt";
+    //private static String initClassAndFunction = "InitMC_Projection_Demo.initPrompt";
 
     private Master(){
         // cannot be instantiated
