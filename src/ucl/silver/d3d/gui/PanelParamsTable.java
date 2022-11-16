@@ -13,12 +13,12 @@ import ucl.silver.d3d.core.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class PanelParamsTable extends JTable {
 
@@ -216,7 +216,7 @@ public class PanelParamsTable extends JTable {
                     
                 } else if (data.getUnits().equalsIgnoreCase("DIR")) {
 
-                    fileName = Master.getFileName(value.toString());
+                    fileName = Master.getDirectory(value.toString());
                     
                     success = paramVectorSelect.set(data, fileName);
 

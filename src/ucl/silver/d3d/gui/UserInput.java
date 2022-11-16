@@ -11,12 +11,12 @@ import ucl.silver.d3d.utils.Utility;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 1.0
+ * @version 2.1
  */
 public class UserInput
         implements UserInputAction {
@@ -90,7 +90,7 @@ public class UserInput
         }
 
         prompt.exit();
-        Master.project.maxC0();
+        Master.project.init();
         Master.mainframe.initTabs();
 
     }
@@ -351,7 +351,7 @@ public class UserInput
             ctotal = Utility.N2C(molecules, Master.project.dx, coordinates.spaceVoxels);
         }
 
-        Master.addSourceImpulse(pnum, coordinates, t, ctotal);
+        Master.addSourceImpulse(pnum, coordinates, t, ctotal, "C");
 
     }
 
@@ -682,7 +682,7 @@ public class UserInput
     public void addDiffusantPhotolysisPrompt2() {
 
         PSF p = null;
-        PulseTimer pt = new PulseTimer(Master.project, 0.1, 0.1, 1.0);
+        PulseTimer pt = new PulseTimer(Master.project, 0.1, 0.1, 1.0, "1/ms");
 
         if (fieldArray.length != 4) {
             return;
@@ -700,7 +700,7 @@ public class UserInput
             p = new PSFtorok(Master.project, null);
         }
 
-        Master.project.addDiffusant(new DiffusantPhoto(Master.project, "LightReactant", c, dd, null, dnum, pt, p, 1));
+        Master.project.addDiffusant(new DiffusantPhoto(Master.project, "LightReactant", c, dd, null, dnum, pt, p));
 
         Master.updatePanel2D();
         Master.resetAllParamVectors();

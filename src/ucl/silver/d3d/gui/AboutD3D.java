@@ -11,12 +11,12 @@ import ucl.silver.d3d.core.*;
  * <p>
  * Description: 3D Reaction-Diffusion Simulator</p>
  * <p>
- * Copyright: Copyright (c) 2018</p>
+ * Copyright: Copyright (c) 2022</p>
  * <p>
  * Company: The Silver Lab at University College London</p>
  *
  * @author Jason Rothman
- * @version 2.0
+ * @version 2.1
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ public class AboutD3D extends JDialog implements ActionListener {
   GridLayout gridLayout1 = new GridLayout();
   String product = "D3D, a 3D Reaction-Diffusion simulator";
   String version = "Version 2.0";
-  String copyright = "Copyright (c) 2018";
+  String copyright = "Copyright (c) 2022";
   String comments = "Created by The Silver Lab at University College London";
   String nl = System.lineSeparator();
   String gnu1 = "This program is free software: you can redistribute it and/or modify it " + nl + "under the terms of the GNU General Public License as published by the Free Software Foundation, " + nl + "either version 3 of the License, or (at your option) any later version.";
